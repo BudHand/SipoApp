@@ -1,0 +1,114 @@
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Notifications from "expo-notifications";
+import { Platform } from "react-native";
+
+// ✅ Handler notifikasi global (versi terbaru, kompatibel Expo SDK 51+)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true, // tampilkan alert popup
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+    shouldShowBanner: true, // ✅ tambahan untuk SDK baru
+    shouldShowList: true,   // ✅ tambahan untuk SDK baru
+  }),
+});
+
+// ✅ Registrasi Push Notification Token (Expo Push Token)
+export async function registerForPushNotificationsAsync() {
+  try {
+    if (!Device.isDevice) {
+      console.warn("❌ Push notification hanya berfungsi di device fisik.");
+      return undefined;
+    }
+
+    // Ambil izin notifikasi
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") {
+      console.warn("⚠️ Izin notifikasi ditolak oleh pengguna.");
+      return undefined;
+    }
+
+    // ✅ Ambil projectId dari Expo Config
+    const projectId =
+      Constants?.expoConfig?.extra?.eas?.projectId ??
+      Constants?.easConfig?.projectId;
+
+    if (!projectId) {
+      console.error("❌ Project ID tidak ditemukan di app.json. Pastikan sudah diset.");
+      return undefined;
+    }
+
+    // ✅ Ambil Expo Push Token
+    const tokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
+    const token = tokenResponse.data;
+
+    console.log("✅ Expo Push Token:", token);
+
+    // ✅ Konfigurasi channel notifikasi Android
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "default",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: "#1E3A8A", // warna navy
+      });
+    }
+
+    return token;
+  } catch (err) {
+    console.error("❌ Gagal mendapatkan Push Token:", err);
+    return undefined;
+  }
+}
+
+// ✅ Listener untuk event notifikasi (foreground & response)
+export function subscribeToNotifications({
+  onNotificationReceived,
+  onNotificationResponse,
+}: {
+  onNotificationReceived?: (notification: Notifications.Notification) => void;
+  onNotificationResponse?: (response: Notifications.NotificationResponse) => void;
+}) {
+  const listeners: (() => void)[] = [];
+
+  if (onNotificationReceived) {
+    const receivedSub = Notifications.addNotificationReceivedListener(onNotificationReceived);
+    listeners.push(() => receivedSub.remove());
+  }
+
+  if (onNotificationResponse) {
+    const responseSub = Notifications.addNotificationResponseReceivedListener(onNotificationResponse);
+    listeners.push(() => responseSub.remove());
+  }
+
+  return () => listeners.forEach((u) => u());
+}
+
+// ✅ Fungsi testing notifikasi lokal
+export async function scheduleLocalNotification({
+  title,
+  body,
+  seconds = 2,
+}: {
+  title: string;
+  body: string;
+  seconds?: number;
+}) {
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body },
+      trigger: { seconds, repeats: false } as any, // gunakan "as any" untuk kompatibilitas SDK
+    });
+    console.log(`✅ Notifikasi lokal dijadwalkan dalam ${seconds} detik`);
+  } catch (err) {
+    console.error("❌ Gagal menjadwalkan notifikasi lokal:", err);
+  }
+}

@@ -1,59 +1,136 @@
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import 'react-native-reanimated';
+import BottomNav from "@/components/BottomNav";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import {
+	Inter_400Regular,
+	Inter_500Medium,
+	Inter_600SemiBold,
+	Inter_700Bold,
+	useFonts,
+} from "@expo-google-fonts/inter";
+import {
+	DarkTheme,
+	DefaultTheme,
+	ThemeProvider,
+} from "@react-navigation/native";
+import { Stack, useGlobalSearchParams, usePathname } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { View } from "react-native";
 
-import { useColorScheme } from '@/components/useColorScheme';
+export const unstable_settings = { anchor: "login" };
 
-export {
-  // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
-} from 'expo-router';
-
-export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
-  initialRouteName: '(tabs)',
-};
-
-// Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
+const groupsWithBottomNav = [
+  "/beranda",
+  "/notifikasi",
+  "/memo",
+  "/profil",
+  "/undangan",
+  "/approval",
+  "/risalah",
+];
 
 export default function RootLayout() {
-  const [loaded, error] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    ...FontAwesome.font,
+  // ✅ Semua hooks dipanggil di atas (tanpa kondisi)
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
+  const colorScheme = useColorScheme();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams();
 
-  // Expo Router uses Error Boundaries to catch errors in the navigation tree.
-  useEffect(() => {
-    if (error) throw error;
-  }, [error]);
+  // ✅ Hitung nilai-nilai yang diperlukan
+  const showBottomNav = groupsWithBottomNav.some((p) => pathname.startsWith(p));
+  const direction = params.animationDirection || "right";
 
-  useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
-
-  if (!loaded) {
+  // ✅ Return null SETELAH semua hooks dipanggil
+  if (!fontsLoaded) {
     return null;
   }
 
-  return <RootLayoutNav />;
-}
-
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-      </Stack>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <View style={{ flex: 1 }}>
+        <Stack initialRouteName="splash/splash1">
+          {/* Beranda  */}
+          <Stack.Screen
+            name="beranda/beranda"
+            options={{ headerShown: false }}
+          />
+
+          {/* Notifikasi  */}
+          <Stack.Screen
+            name="notifikasi/notifikasi"
+            options={{ headerShown: false }}
+          />
+
+          {/* Splash */}
+          <Stack.Screen
+            name="splash/splash1"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="splash/splash2"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="splash/splash3"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="splash/splash4"
+            options={{ headerShown: false }}
+          />
+
+          {/* Main */}
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="modal"
+            options={{ presentation: "modal", title: "Modal" }}
+          />
+          <Stack.Screen
+            name="memo/memos"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="memo/memo-detail"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="undangan/undangan"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="undangan/undangan-detail"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="risalah/risalah"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="risalah/risalah-detail"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="approval/approval"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="profil/profil" options={{ headerShown: false }} />
+        </Stack>
+
+        <StatusBar style="auto" />
+
+        {/* tampilkan hanya di folder yang diizinkan */}
+        {showBottomNav && (
+          <View
+            pointerEvents="box-none"
+            style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
+            <BottomNav />
+          </View>
+        )}
+      </View>
     </ThemeProvider>
   );
 }

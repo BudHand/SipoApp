@@ -1,0 +1,363 @@
+// app/(or src)/login.tsx  (sesuaikan path)
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import Button from "../components/button";
+import { PasswordField, TextField } from "../components/FormControl";
+import { Colors } from "../constants/colors";
+import { Fonts } from "../constants/fonts";
+import { apiFetch } from "../utils/api";
+import { registerForPushNotificationsAsync } from "../utils/notifications";
+
+function LoginScreenInner() {
+  // hooks MUST be called synchronously at top level of component
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [loading, setLoading] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertMsg, setAlertMsg] = useState("");
+  const [alertTitle, setAlertTitle] = useState("Info");
+
+  const slideAnim = useRef(new Animated.Value(200)).current;
+  const passwordRef = useRef<any>(null);
+
+  useEffect(() => {
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [slideAnim]);
+
+  const showCustomAlert = (msg: string, title: string = "Info") => {
+    setAlertMsg(msg);
+    setAlertTitle(title);
+    setAlertVisible(true);
+  };
+const handleLogin = async () => {
+  if (!email || !password) {
+    showCustomAlert("Email dan Password harus diisi", "Error");
+    return;
+  }
+
+  setErrors({});
+  setLoading(true);
+
+  try {
+    const res = await apiFetch("/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+
+    console.log("Login response:", res);
+
+    if (res.status === "success") {
+      const user = res.user;
+      const apiToken = res.token;
+
+      await AsyncStorage.multiSet([
+        ["token", apiToken],
+        ["user", JSON.stringify(user)],
+        ["role", String(user.id_role ?? user.role ?? "")],
+      ]);
+
+      // 🔹 Step 1: Tampilkan loading sebelum register token
+      setAlertVisible(false); // pastikan tidak bentrok modal
+      showCustomAlert("Menyiapkan notifikasi...", "Mohon Tunggu");
+
+      try {
+        const expoToken = await registerForPushNotificationsAsync();
+
+        if (expoToken) {
+          console.log("✅ Expo Push Token:", expoToken);
+          await apiFetch("/notifikasi/token", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiToken}`,
+            },
+            body: JSON.stringify({
+              token: expoToken,
+              platform: Platform.OS,
+            }),
+          });
+          console.log("✅ Notification token sent to server");
+        }
+      } catch (e) {
+        console.warn("❌ Gagal register notifikasi:", e);
+      }
+
+      // 🔹 Step 2: Delay sedikit biar semua state stabil
+      setTimeout(() => {
+        showCustomAlert(`Selamat datang, ${user.fullname}`, "Login Berhasil");
+        setTimeout(() => {
+          router.replace("/beranda/beranda");
+        }, 500);
+      }, 500);
+    } else {
+      showCustomAlert(res.message ?? "Email atau password salah", "Login Gagal");
+    }
+  } catch (err) {
+    console.error("Login error:", err);
+    showCustomAlert("Terjadi kesalahan. Coba lagi.", "Error");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  // const handleLogin = async () => {
+  //   // simple validation
+  //   if (!email || !password) {
+  //     showCustomAlert("Email dan Password harus diisi", "Error");
+  //     return;
+  //   }
+
+  //   setErrors({});
+  //   setLoading(true);
+
+  //   try {
+  //     // call login endpoint (ensure Content-Type so backend reads JSON)
+  //     const res = await apiFetch("/login", {
+  //       method: "POST",
+  //       // headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ email, password }),
+  //     });
+
+  //     console.log("Login response:", res);
+
+  //     if (res.status === "success") {
+  //       const user = res.user;
+  //       const apiToken = res.token;
+
+  //       // store minimal data
+  //       await AsyncStorage.multiSet([
+  //         ["token", apiToken],
+  //         ["user", JSON.stringify(user)],
+  //         ["role", String(user.id_role ?? user.role ?? "")],
+  //       ]);
+
+  //       // Register for push notifications and send token to backend (if available)
+  //       try {
+  //         const expoToken = await registerForPushNotificationsAsync();
+
+  //         if (expoToken) {
+  //           console.log("🔥 expo token:", expoToken);
+
+  //           // Kirim token ke backend
+  //           await apiFetch("/notifikasi/token", {
+  //             method: "POST",
+  //             headers: {
+  //               "Content-Type": "application/json",
+  //               Authorization: `Bearer ${apiToken}`,
+  //             },
+  //             body: JSON.stringify({
+  //               token: expoToken,
+  //               platform: Platform.OS, // ✅ Tambahan opsional (supaya backend tahu iOS/Android)
+  //             }),
+  //           });
+
+  //           console.log("✅ Notification token sent to server");
+  //         } else {
+  //           console.warn("⚠️ Tidak berhasil mendapatkan expo token");
+  //         }
+  //       } catch (err) {
+  //         console.warn("❌ Failed to register/send push token:", err);
+  //       }
+  //       // show success and navigate after a short delay
+  //       showCustomAlert(`Selamat datang, ${user.fullname}`, "Login Berhasil");
+  //       setTimeout(() => {
+  //         router.replace("/beranda/beranda");
+  //       }, 700);
+  //     } else {
+  //       // backend returned failure
+  //       showCustomAlert(res.message ?? "Email atau password salah", "Login Gagal");
+  //     }
+  //   } catch (err: any) {
+  //     console.error("Login error:", err);
+  //     showCustomAlert("Terjadi kesalahan. Coba lagi.", "Error");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  function CustomAlert({ visible, onClose, title, message }: any) {
+    return (
+      <Modal transparent visible={visible} animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "rgba(0,0,0,0.5)",
+          }}
+        >
+          <View
+            style={{
+              width: "80%",
+              backgroundColor: "#fff",
+              padding: 20,
+              borderRadius: 12,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
+              {title}
+            </Text>
+            <Text style={{ fontSize: 14, textAlign: "center", marginBottom: 20 }}>
+              {message}
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#1E3A8A",
+                paddingVertical: 10,
+                paddingHorizontal: 20,
+                borderRadius: 8,
+              }}
+              onPress={onClose}
+            >
+              <Text style={{ color: "#fff", fontWeight: "bold" }}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: Colors.navy }}
+      behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
+    >
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        {loading && (
+  <View
+    style={{
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.4)",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 999,
+    }}
+  >
+    <Text style={{ color: "#fff", fontSize: 16 }}>Memproses...</Text>
+  </View>
+)}
+
+        {/* Header */}
+        <View
+          style={{
+            paddingTop: insets.top,
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+            backgroundColor: Colors.navy,
+          }}
+        >
+          <Image
+            source={require("../assets/images/login-graphic.png")}
+            style={{ width: 350, height: 300, marginBottom: 10 }}
+            resizeMode="contain"
+          />
+          <View style={{ alignItems: "flex-start", width: "90%" }}>
+            <Text style={[Fonts.header1, { color: Colors.white, marginTop: 15 }]}>
+              Halo, Selamat Datang!
+            </Text>
+            <Text style={[Fonts.paragraphRegularSmall, { color: "#e0e0e0", marginTop: 5 }]}>
+              Akses dokumen dan persuratan kapan saja, dimana saja.
+            </Text>
+          </View>
+        </View>
+
+        {/* Login box */}
+        <Animated.View
+          style={{
+            // flex: 2,
+            flexGrow: 1,
+            backgroundColor: Colors.white,
+            borderTopLeftRadius: 30,
+            borderTopRightRadius: 30,
+            paddingHorizontal: 24,
+            paddingVertical: 25,
+            paddingBottom: insets.bottom,
+            transform: [{ translateY: slideAnim }],
+          }}
+        >
+          <Text style={[Fonts.header1, { color: Colors.black, marginBottom: 20 }]}>Login</Text>
+
+          <TextField
+            label="Email"
+            placeholder="email..."
+            value={email}
+            onChangeText={setEmail}
+            helperText={errors.email}
+            status={errors.email ? "error" : "default"}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+          />
+
+          <PasswordField
+            label="Password"
+            placeholder="password..."
+            value={password}
+            onChangeText={setPassword}
+            helperText={errors.password}
+            status={errors.password ? "error" : "default"}
+            autoCapitalize="none"
+            secureTextEntry
+            ref={passwordRef}
+            returnKeyType="done"
+            onSubmitEditing={handleLogin}
+          />
+
+          <Button
+            title={loading ? "Loading..." : "Login"}
+            size="large"
+            variant="solid"
+            onPress={handleLogin}
+            style={{ width: "100%", marginTop: 10 }}
+          />
+
+          <CustomAlert
+            visible={alertVisible}
+            title={alertTitle}
+            message={alertMsg}
+            onClose={() => setAlertVisible(false)}
+          />
+        </Animated.View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+export default function LoginScreen() {
+  // wrap with SafeAreaProvider only once at root (ok to keep it here if not provided globally)
+  return (
+    <SafeAreaProvider>
+      <LoginScreenInner />
+    </SafeAreaProvider>
+  );
+}

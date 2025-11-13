@@ -1,0 +1,187 @@
+// app/profil/profil.tsx
+import Button from "@/components/button";
+import { TextField } from "@/components/FormControl";
+import { Colors } from "@/constants/colors";
+import { Fonts } from "@/constants/fonts";
+import { apiFetch } from "@/utils/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+export default function ProfilScreen() {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await AsyncStorage.removeItem("token");
+    await AsyncStorage.removeItem("user");
+    router.replace("/login");
+  };
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true);
+        const data = await apiFetch(`/profile`);
+        setUser(data);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text
+          style={[
+            Fonts.paragraphMediumLarge,
+            { marginTop: 12, color: Colors.textSecondary },
+          ]}
+        >
+          Memuat profil...
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) return null;
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {/* Header melengkung gradasi */}
+      <View style={styles.container}>
+      {/* Ombak Gradasi */}
+      <LinearGradient
+        colors={["#0B1C39", "#1C3B70", "#2E5CA0"]} // gradasi biru navy ke biru muda
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.waveContainer}
+      >
+        <View style={styles.waveShape} />
+      </LinearGradient>
+
+      {/* Foto Profil */}
+      <View style={styles.avatarContainer}>
+        {user?.profile_image ? (
+          <Image
+            source={{ uri: user.profile_image }}
+            style={styles.avatar}
+            resizeMode="cover"
+          />
+        ) : (
+          <Image
+            source={require("../../assets/icons/default_user.png")} // gunakan default avatar
+            style={styles.avatar}
+            resizeMode="cover"
+          />
+        )}
+      </View>
+
+      {/* Nama dan Jabatan */}
+      <Text style={styles.name}>{user?.fullname ?? "Nama Pengguna"}</Text>
+      <Text style={styles.role}>{user?.position ?? "Jabatan"}</Text>
+    </View>
+
+      {/* Nama dan posisi */}
+      <Text style={styles.name}>{user.fullname}</Text>
+      <Text style={styles.role}>{user.position}</Text>
+
+      {/* Form detail profil */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <TextField label="Email" value={user.email} status="disabled" />
+        <TextField label="Nama Depan" value={user.firstname} status="disabled" />
+        <TextField label="Nama Belakang" value={user.lastname} status="disabled" />
+        <TextField label="Nama Pengguna" value={user.username} status="disabled" />
+        <TextField label="Nomor Telepon" value={user.phone_number} status="disabled" />
+
+        <View style={{ height: 8 }} />
+        <Button title="Logout" onPress={handleLogout} color={Colors.danger} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+/* ------------------ STYLE ------------------ */
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.white },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: Colors.white,
+  },
+  headerContainer: {
+    width: "100%",
+    position: "relative",
+  },
+  gradient: {
+    height: 200,
+    justifyContent: "flex-end",
+  },
+ waveContainer: {
+    position: "absolute",
+    top: 0,
+    width: "100%",
+    height: 220,
+    borderBottomLeftRadius: 100,
+    borderBottomRightRadius: 100,
+    overflow: "hidden",
+  },
+  waveShape: {
+    width: "200%",
+    height: 200,
+    backgroundColor: "transparent",
+    borderBottomLeftRadius: 200,
+    borderBottomRightRadius: 200,
+  },
+  avatarContainer: {
+    marginTop: 40,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+    elevation: 6,
+  },
+  avatar: {
+    width: "100%",
+    height: "100%",
+  },
+  name: {
+  ...Fonts.header4, // gunakan gaya heading sedang dari konstanta
+  marginTop: 16,
+  color: "#fff",
+},
+role: {
+  ...Fonts.paragraphRegularSmall, // gunakan gaya paragraf kecil dari konstanta
+  color: "#D0D6E3",
+},
+
+  scroll: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 120,
+    gap: 8,
+  },
+});

@@ -1,0 +1,40 @@
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
+
+// Fungsi utama
+export async function registerForPushNotificationsAsync() {
+  let token;
+
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') {
+      alert('Izin notifikasi tidak diberikan!');
+      return;
+    }
+
+    // ✅ Ambil FCM token langsung (bukan Expo token)
+    const fcmToken = await Notifications.getDevicePushTokenAsync();
+
+    token = fcmToken.data;
+    console.log('✅ FCM Token:', token);
+  } else {
+    alert('Harus dijalankan di perangkat fisik.');
+  }
+
+  if (Platform.OS === 'android') {
+    Notifications.setNotificationChannelAsync('default', {
+      name: 'default',
+      importance: Notifications.AndroidImportance.MAX,
+    });
+  }
+
+  return token;
+}
