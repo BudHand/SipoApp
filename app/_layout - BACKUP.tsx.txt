@@ -19,112 +19,118 @@ import { View } from "react-native";
 export const unstable_settings = { anchor: "login" };
 
 const groupsWithBottomNav = [
-	"/beranda",
-	"/notifikasi",
-	"/memo",
-	"/profil",
-	"/undangan",
-	"/approval",
-	"/risalah",
+  "/beranda",
+  "/notifikasi",
+  "/memo",
+  "/profil",
+  "/undangan",
+  "/approval",
+  "/risalah",
 ];
 
 export default function RootLayout() {
-	const [fontsLoaded] = useFonts({
-		Inter_400Regular,
-		Inter_500Medium,
-		Inter_600SemiBold,
-		Inter_700Bold,
-	});
-	const colorScheme = useColorScheme();
-	const pathname = usePathname();
-	const params = useGlobalSearchParams();
-	if (!fontsLoaded) return null;
+  // ✅ Semua hooks dipanggil di atas (tanpa kondisi)
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+  const colorScheme = useColorScheme();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams();
 
-	const showBottomNav = groupsWithBottomNav.some((p) => pathname.startsWith(p));
-	const direction = params.animationDirection || "right";
+  // ✅ Hitung nilai-nilai yang diperlukan
+  const showBottomNav = groupsWithBottomNav.some((p) => pathname.startsWith(p));
+  const direction = params.animationDirection || "right";
 
-	return (
-		<ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-			<View style={{ flex: 1 }}>
-				<Stack initialRouteName="splash/splash1">
-					{/* Beranda  */}
-					<Stack.Screen
-						name="beranda/beranda"
-						options={{ headerShown: false }}
-					/>
+  // ✅ Return null SETELAH semua hooks dipanggil
+  if (!fontsLoaded) {
+    return null;
+  }
 
-					{/* Notifikasi  */}
-					<Stack.Screen
-						name="notifikasi/notifikasi"
-						options={{ headerShown: false }}
-					/>
+  return (
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <View style={{ flex: 1 }}>
+        <Stack initialRouteName="splash/splash1">
+          {/* Beranda  */}
+          <Stack.Screen
+            name="beranda/beranda"
+            options={{ headerShown: false }}
+          />
 
-					{/* Splash */}
-					<Stack.Screen
-						name="splash/splash1"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="splash/splash2"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="splash/splash3"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="splash/splash4"
-						options={{ headerShown: false }}
-					/>
+          {/* Notifikasi  */}
+          <Stack.Screen
+            name="notifikasi/notifikasi"
+            options={{ headerShown: false }}
+          />
 
-					{/* Main */}
-					<Stack.Screen name="login" options={{ headerShown: false }} />
-					<Stack.Screen
-						name="modal"
-						options={{ presentation: "modal", title: "Modal" }}
-					/>
-					<Stack.Screen
-						name="memo/memos"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="memo/memo-detail"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="undangan/undangan"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="undangan/undangan-detail"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="risalah/risalah"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="risalah/risalah-detail"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen
-						name="approval/approval"
-						options={{ headerShown: false }}
-					/>
-					<Stack.Screen name="profil/profil" options={{ headerShown: false }} />
-				</Stack>
+          {/* Splash */}
+          <Stack.Screen
+            name="splash/splash1"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="splash/splash2"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="splash/splash3"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="splash/splash4"
+            options={{ headerShown: false }}
+          />
 
-				<StatusBar style="auto" />
+          {/* Main */}
+          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="modal"
+            options={{ presentation: "modal", title: "Modal" }}
+          />
+          <Stack.Screen
+            name="memo/memos"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="memo/memo-detail"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="undangan/undangan"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="undangan/undangan-detail"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="risalah/risalah"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="risalah/risalah-detail"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="approval/approval"
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen name="profil/profil" options={{ headerShown: false }} />
+        </Stack>
 
-				{/* tampilkan hanya di folder yang diizinkan */}
-				{showBottomNav && (
-					<View
-						pointerEvents="box-none"
-						style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
-						<BottomNav />
-					</View>
-				)}
-			</View>
-		</ThemeProvider>
-	);
+        <StatusBar style="auto" />
+
+        {/* tampilkan hanya di folder yang diizinkan */}
+        {showBottomNav && (
+          <View
+            pointerEvents="box-none"
+            style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
+            <BottomNav />
+          </View>
+        )}
+      </View>
+    </ThemeProvider>
+  );
 }

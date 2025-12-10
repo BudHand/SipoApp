@@ -112,13 +112,24 @@ export default function UndanganDetail() {
         const data = raw?.data ?? raw;
         setDetail(data);
       } catch (error) {
-        console.log("Error", "Gagal memuat detail undangan: " + error);
+        Alert.alert("Error", "Gagal memuat detail undangan: " + error);
       } finally {
         setLoading(false);
       }
     }
     fetchDetail();
   }, [id, notif_id]);
+
+  const [loadingPDF, setLoadingPDF] = useState(false);
+
+  const loadPDF = async () => {
+    try{
+      setLoadingPDF(true);
+      await viewPDF("undangans", detail.id_undangan);
+    } finally {
+      setLoadingPDF(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -326,16 +337,19 @@ export default function UndanganDetail() {
 
               {/* Unduh PDF */}
               <SectionTitle>Detail undangan :</SectionTitle>
-              <Pressable
-                onPress={() => viewPDF("undangans", detail.id_undangan)}
-                style={styles.pdfButton}
-              >
+              <Pressable onPress={loadPDF} style={styles.pdfButton}>
+                {loadingPDF ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <>
                 <FontAwesome5 name="file-pdf" size={14} color={Colors.white} />
                 <Text
                   style={[Fonts.paragraphMediumSmall, { color: Colors.white }]}
                 >
                   View PDF
                 </Text>
+                </>
+                )}
               </Pressable>
             </View>
           </View>

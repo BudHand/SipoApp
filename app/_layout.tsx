@@ -1,16 +1,16 @@
 import BottomNav from "@/components/BottomNav";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
-	Inter_400Regular,
-	Inter_500Medium,
-	Inter_600SemiBold,
-	Inter_700Bold,
-	useFonts,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+  useFonts,
 } from "@expo-google-fonts/inter";
 import {
-	DarkTheme,
-	DefaultTheme,
-	ThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
 } from "@react-navigation/native";
 import { Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -52,7 +52,16 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <View style={{ flex: 1 }}>
-        <Stack initialRouteName="splash/splash1">
+        <Stack 
+          initialRouteName="splash/splash1"
+          screenOptions={{
+            // 🔥 FIX: Disable gesture swipe back di iOS untuk mencegah kembali ke login
+            gestureEnabled: false,
+            // Alternatif: Hanya disable di iOS, tetap enable di Android
+            // gestureEnabled: Platform.OS !== 'ios',
+            animation: 'default',
+          }}
+        >
           {/* Beranda  */}
           <Stack.Screen
             name="beranda/beranda"
@@ -84,7 +93,14 @@ export default function RootLayout() {
           />
 
           {/* Main */}
-          <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen 
+            name="login" 
+            options={{ 
+              headerShown: false,
+              // 🔥 FIX: Pastikan tidak bisa swipe back dari halaman lain ke login
+              gestureEnabled: false,
+            }} 
+          />
           <Stack.Screen
             name="modal"
             options={{ presentation: "modal", title: "Modal" }}

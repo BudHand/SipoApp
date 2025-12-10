@@ -111,16 +111,27 @@ export default function MemoDetail() {
         // ⬇️ Ganti endpoint untuk MEMO
         const raw = await apiFetch(`/memos/${id}`);
         const data = raw?.data ?? raw;
-        console.log(data);
+        //console.log(data);
         setDetail(data);
       } catch (error) {
-        console.log("Error", "Gagal memuat detail memo: " + error);
+        Alert.alert("Error", "Gagal memuat detail memo: " + error);
       } finally {
         setLoading(false);
       }
     }
     fetchDetail();
   }, [id, notif_id]);
+
+  const [loadingPDF, setLoadingPDF] = useState(false);
+
+  const loadPDF = async () => {
+    try {
+      setLoadingPDF(true);
+      await viewPDF("memos", detail.id_memo);
+    } finally {
+      setLoadingPDF(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -330,36 +341,28 @@ export default function MemoDetail() {
                   </>
                 )}
 
-              {/* Isi Memo */}
-              {/*Boolean(
-                detail?.isi_memo ?? detail?.content ?? detail?.deskripsi
-              ) && (
-                <>
-                  <SectionTitle>Isi memo :</SectionTitle>
-                  <Text
-                    style={[
-                      Fonts.paragraphRegularSmall,
-                      { color: Colors.textPrimary, marginBottom: 12 },
-                    ]}
-                  >
-                    {detail?.isi_memo ?? detail?.content ?? detail?.deskripsi}
-                  </Text>
-                </>
-              ) */}
-
               {/* Unduh PDF */}
               <SectionTitle>Detail memo :</SectionTitle>
-              <Pressable
-                // ⬇️ sesuaikan id memo-mu (id_memo / id / memo_id)
-                onPress={() => viewPDF("memos", detail.id_memo)}
-                style={styles.pdfButton}
-              >
-                <FontAwesome5 name="file-pdf" size={14} color={Colors.white} />
-                <Text
-                  style={[Fonts.paragraphMediumSmall, { color: Colors.white }]}
-                >
-                  View PDF
-                </Text>
+              <Pressable onPress={loadPDF} style={styles.pdfButton}>
+                {loadingPDF ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <>
+                    <FontAwesome5
+                      name="file-pdf"
+                      size={14}
+                      color={Colors.white}
+                    />
+                    <Text
+                      style={[
+                        Fonts.paragraphMediumSmall,
+                        { color: Colors.white, marginLeft: 6 },
+                      ]}
+                    >
+                      View PDF
+                    </Text>
+                  </>
+                )}
               </Pressable>
             </View>
           </View>

@@ -4,39 +4,62 @@ import { apiFetch } from "@/utils/api";
 import { formatTanggalID } from "@/utils/date";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import { Redirect, SplashScreen, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BackHandler,
   RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function BerandaScreen() {
-  const router = useRouter();
-  const [upcomingMeetings, setUpcomingMeetings] = React.useState<any[]>([]);
-  const [waitingApproval, setWaitingApproval] = React.useState<any[]>([]);
+  // ✅ SEMUA HOOK DI ATAS — TANPA PENGECUALIAN
+  const router = useRouter(); // 👈 dipindahkan ke atas
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const [memoCount, setMemoCount] = React.useState(0);
-  const [risalahCount, setRisalahCount] = React.useState(0);
-  const [undanganCount, setUndanganCount] = React.useState(0);
-  const [fullname, setFullname] = React.useState("-");
-  const [role, setRole] = React.useState<string | null>(null);
+  // Semua state yang sebelumnya di bawah
+  const [upcomingMeetings, setUpcomingMeetings] = useState<any[]>([]);
+  const [waitingApproval, setWaitingApproval] = useState<any[]>([]);
+  const [memoCount, setMemoCount] = useState(0);
+  const [risalahCount, setRisalahCount] = useState(0);
+  const [undanganCount, setUndanganCount] = useState(0);
+  const [fullname, setFullname] = useState("-");
+  const [role, setRole] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [refreshing, setRefreshing] = useState(false); // Tambahan untuk refresh
+  const backPressCount = useRef(0);
+  const [showExitModal, setShowExitModal] = useState(false);
 
-  // Pindahkan fetchDashboardData keluar agar bisa dipanggil ulang
+  // Efek untuk cek auth
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await AsyncStorage.getItem("token");
+      setIsAuthenticated(!!token);
+      setAuthChecked(true);
+    };
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    if (authChecked) {
+      SplashScreen.hideAsync();
+    }
+  }, [authChecked]);
+
+  // 🔁 Pindahkan fetchDashboardData ke sini (sebagai useCallback)
   const fetchDashboardData = useCallback(async () => {
+    if (!isAuthenticated) return; // hindari fetch jika tidak login
     try {
       setRole(await AsyncStorage.getItem("role"));
       const res = await apiFetch("/dashboard");
       const json = res;
-
       if (json.data) {
         const {
           memo_count,
@@ -74,17 +97,19 @@ export default function BerandaScreen() {
     } catch (err) {
       console.error("Gagal ambil data dashboard:", err);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+    if (isAuthenticated) {
+      fetchDashboardData();
+    }
+  }, [isAuthenticated, fetchDashboardData]);
 
-  // 👇 Handler untuk pull-to-refresh
   const onRefresh = async () => {
+    if (!isAuthenticated) return;
     setRefreshing(true);
     await fetchDashboardData();
-    setTimeout(() => setRefreshing(false), 500); // biar animasinya tidak hilang terlalu cepat
+    setTimeout(() => setRefreshing(false), 500);
   };
 
   const getIconForType = (type: string) => {
@@ -100,6 +125,45 @@ export default function BerandaScreen() {
     }
   };
 
+  // 🔸 [TAMBAHAN] useEffect untuk BackHandler — ditempatkan di sini (setelah semua useState/useRef, sebelum conditional return)
+  useEffect(() => {
+  const handleBackPress = () => {
+    if (backPressCount.current === 0) {
+      backPressCount.current = 1;
+      setShowExitModal(true); // Tampilkan modal
+
+      setTimeout(() => {
+        backPressCount.current = 0;
+        setShowExitModal(false); // Sembunyikan setelah 2 detik
+      }, 2000);
+
+      return true; // mencegah exit
+    } else {
+      BackHandler.exitApp();
+      return true;
+    }
+  };
+
+  const backHandler = BackHandler.addEventListener(
+    'hardwareBackPress',
+    handleBackPress
+  );
+
+  return () => backHandler.remove();
+}, []);
+
+
+  // ✅ Baru lakukan conditional render di akhir
+  if (!authChecked) {
+    return null; // atau loading
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+
+
+  // Render UI
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: "#F5F8FB" }}
@@ -142,6 +206,7 @@ export default function BerandaScreen() {
 
           {/* Quick stats */}
           <View style={styles.quickStatContainer}>
+            <TouchableOpacity style={{ flex: 2 }} onPress={() => router.push("/memo/memos")}>
             <View style={[styles.quickCard, { backgroundColor: "#EAF0FF" }]}>
               <Image
                 source={require("@/assets/icons/memo/memo_blue.png")}
@@ -159,6 +224,8 @@ export default function BerandaScreen() {
                 Memo
               </Text>
             </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flex: 2 }} onPress={() => router.push("/undangan/undangan")}>
             <View style={[styles.quickCard, { backgroundColor: "#F2ECFF" }]}>
               <Image
                 source={require("@/assets/icons/undangan/undangan_purple.png")}
@@ -178,6 +245,8 @@ export default function BerandaScreen() {
                 Undangan
               </Text>
             </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ flex: 2 }} onPress={() => router.push("/risalah/risalah")}>  
             <View style={[styles.quickCard, { backgroundColor: "#E7FAEE" }]}>
               <Image
                 source={require("@/assets/icons/risalah/risalah_green.png")}
@@ -197,6 +266,7 @@ export default function BerandaScreen() {
                 Risalah
               </Text>
             </View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -257,7 +327,7 @@ export default function BerandaScreen() {
                 Risalah
               </Text>
             </TouchableOpacity>
-            {role === "3" && (
+            {/* {role === "3" && ( */}
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => router.push("/approval/approval")}
@@ -277,7 +347,7 @@ export default function BerandaScreen() {
                   Approval
                 </Text>
               </TouchableOpacity>
-            )}
+            {/* )} */}
           </View>
         </View>
 
@@ -504,6 +574,34 @@ export default function BerandaScreen() {
           </View>
         )}
       </ScrollView>
+      {/* ===== Modal Konfirmasi Keluar Aplikasi ===== */}
+      {/* Modal Keluar Aplikasi */}
+      {showExitModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Tekan lagi untuk keluar</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowExitModal(false);
+                  backPressCount.current = 0;
+                }}
+              >
+                <Text style={styles.buttonText}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.exitButton]}
+                onPress={() => {
+                  BackHandler.exitApp();
+                }}
+              >
+                <Text style={styles.buttonText}>Keluar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -531,7 +629,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
   },
   quickCard: {
-    flex: 1,
+    // flex: 1,
     alignItems: "center",
     borderRadius: 16,
     paddingVertical: 24,
@@ -572,5 +670,59 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+    color: Colors.navy,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#e0e0e0',
+    marginRight: 8,
+  },
+  exitButton: {
+    backgroundColor: Colors.navy, // sesuaikan dengan warna tema Anda
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#fff',
   },
 });

@@ -79,6 +79,7 @@ export default function RisalahDetail() {
   const [showOptions, setShowOptions] = useState(false);
   const [role, setRole] = useState<string | null>(null);
   const [showAlert, setShowAlert] = useState(false);
+  const [owner, setOwner] = useState(false);
 
   useEffect(() => {
     AsyncStorage.getItem("role").then((r) => setRole(r));
@@ -97,17 +98,32 @@ export default function RisalahDetail() {
         }
         const raw = await apiFetch(`/risalahs/${id}`);
         const data = raw?.data ?? raw;
-        console.log(data);
+        const owner = raw.owner;
+        // console.log(data);
+        // console.log(owner);
+
         setDetail(data);
+        setOwner(owner);
       } catch (error) {
-        console.log("Error:", error);
-        Alert.alert("Gagal", "Tidak dapat memuat detail risalah.");
+        // console.log("Error:", error);
+        Alert.alert("Gagal", "Tidak dapat memuat detail risalah." + error);
       } finally {
         setLoading(false);
       }
     }
     fetchDetail();
   }, [id]);
+
+  const [loadingPDF, setLoadingPDF] = useState(false);
+
+  const loadPDF = async () => {
+    try {
+      setLoadingPDF(true);
+      await viewPDF("risalahs", detail.id_risalah);
+    } finally {
+      setLoadingPDF(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -307,16 +323,26 @@ export default function RisalahDetail() {
                   </>
                 )}
               <SectionTitle>Detail Risalah :</SectionTitle>
-              <Pressable
-                onPress={() => viewPDF("risalahs", detail.id_risalah)}
-                style={styles.pdfButton}
-              >
-                <FontAwesome5 name="file-pdf" size={14} color={Colors.white} />
-                <Text
-                  style={[Fonts.paragraphMediumSmall, { color: Colors.white }]}
-                >
-                  View PDF
-                </Text>
+              <Pressable onPress={loadPDF} style={styles.pdfButton}>
+                {loadingPDF ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <>
+                    <FontAwesome5
+                      name="file-pdf"
+                      size={14}
+                      color={Colors.white}
+                    />
+                    <Text
+                      style={[
+                        Fonts.paragraphMediumSmall,
+                        { color: Colors.white },
+                      ]}
+                    >
+                      View PDF
+                    </Text>
+                  </>
+                )}
               </Pressable>
 
               {/* Catatan dari server */}
@@ -344,7 +370,7 @@ export default function RisalahDetail() {
         </ScrollView>
 
         {/* Tombol Persetujuan */}
-        {statusNow === "pending" && role === "3" && (
+        {statusNow === "pending" && owner && (
           <View
             style={[styles.bottomButtonContainer, { bottom: bottomOffset }]}
           >
@@ -482,27 +508,29 @@ export default function RisalahDetail() {
             </>
           )}
 
-          <Pressable
-            disabled={isSaveDisabled || submitting}
-            onPress={submitApproval}
-            style={[
-              styles.submitBtn,
-              (isSaveDisabled || submitting) && { opacity: 0.6 },
-            ]}
-          >
-            {submitting ? (
-              <ActivityIndicator color={Colors.white} />
-            ) : (
-              <Text
-                style={[
-                  Fonts.paragraphMediumSmall,
-                  { color: Colors.white, textAlign: "center" },
-                ]}
-              >
-                Simpan
-              </Text>
-            )}
-          </Pressable>
+          {owner && (
+            <Pressable
+              disabled={isSaveDisabled || submitting}
+              onPress={submitApproval}
+              style={[
+                styles.submitBtn,
+                (isSaveDisabled || submitting) && { opacity: 0.6 },
+              ]}
+            >
+              {submitting ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text
+                  style={[
+                    Fonts.paragraphMediumSmall,
+                    { color: Colors.white, textAlign: "center" },
+                  ]}
+                >
+                  Simpan
+                </Text>
+              )}
+            </Pressable>
+          )}
         </View>
       </Modal>
       {/* <BottomNav /> */}

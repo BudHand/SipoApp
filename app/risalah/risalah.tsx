@@ -49,16 +49,18 @@ const statusConfig: Record<
 export default function RisalahScreen() {
   const router = useRouter();
   const { approval } = useLocalSearchParams<{ approval?: string }>();
-  
+
   const [risalah, setRisalah] = useState<Risalah[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  
+
   // Filter states
   const [status, setStatus] = useState<string | null>(null);
   const [divisi, setDivisi] = useState<string | null>(null);
-  const [openDropdown, setOpenDropdown] = useState<"status" | "divisi" | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<"status" | "divisi" | null>(
+    null
+  );
   const [divisiOptions, setDivisiOptions] = useState<
     { label: string; value: string }[]
   >([]);
@@ -94,7 +96,7 @@ export default function RisalahScreen() {
       let url = "/risalahs";
 
       if (approval === "1") {
-        url = "/risalahs?status=pending";
+        url = "/risalahs?approval=true";
       } else {
         const params = new URLSearchParams();
         if (status) params.append("status", status);
@@ -362,7 +364,9 @@ export default function RisalahScreen() {
                 style={styles.clearFilterBtn}
                 onPress={handleReset}
               >
-                <Text style={[Fonts.paragraphMediumSmall, styles.clearFilterText]}>
+                <Text
+                  style={[Fonts.paragraphMediumSmall, styles.clearFilterText]}
+                >
                   Hapus Filter
                 </Text>
               </TouchableOpacity>
@@ -408,10 +412,7 @@ export default function RisalahScreen() {
                   </Text>
                   <View style={styles.timeWrapper}>
                     <Text
-                      style={[
-                        styles.infoValue,
-                        Fonts.paragraphRegularSmall,
-                      ]}
+                      style={[styles.infoValue, Fonts.paragraphRegularSmall]}
                     >
                       {item.waktu_mulai || "-"}
                     </Text>
@@ -425,10 +426,7 @@ export default function RisalahScreen() {
                       -
                     </Text>
                     <Text
-                      style={[
-                        styles.infoValue,
-                        Fonts.paragraphRegularSmall,
-                      ]}
+                      style={[styles.infoValue, Fonts.paragraphRegularSmall]}
                     >
                       {item.waktu_selesai || "-"}
                     </Text>

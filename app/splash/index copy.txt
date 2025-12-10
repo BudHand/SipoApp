@@ -57,7 +57,7 @@ export default function SplashPager() {
       {/* Dots (4 titik: Splash2, 3, 4, dan halaman transisi) */}
       <View style={styles.dotsContainer}>
         <Dots
-          total={4}
+          total={3}
           activeIndex={page}
           color={Colors.navy}
           inactiveColor="rgba(30,65,120,0.2)"

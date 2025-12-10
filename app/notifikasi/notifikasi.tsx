@@ -5,6 +5,7 @@ import { apiFetch } from "@/utils/api";
 import { formatTanggalID } from "@/utils/date";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -125,6 +126,7 @@ export default function NotifikasiScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.centerContainer}>
+        <StatusBar style="dark" />
         <ActivityIndicator size="large" color={Colors.navy} />
         <Text style={[Fonts.paragraphMediumSmall, styles.loadingText]}>
           Memuat notifikasi...
@@ -138,7 +140,10 @@ export default function NotifikasiScreen() {
   const isEmpty = !hasUnread && !hasRead;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      {/* 🔥 STATUS BAR - Text hitam untuk background putih */}
+      <StatusBar style="dark" />
+
       {/* Header - Fixed at top */}
       <View style={styles.header}>
         <Pressable

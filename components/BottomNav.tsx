@@ -186,7 +186,7 @@ export default function BottomNav() {
       <View style={styles.container}>
         {ITEMS.map((item) => {
           // hide approval jika bukan role 3
-          if (item.key === "signature" && role !== "3") return null;
+          // if (item.key === "signature" && role !== "3") return null;
 
           const isActive =
             pathname === item.href || pathname.startsWith(item.href + "/");

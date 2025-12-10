@@ -1,5 +1,6 @@
 // app/(or src)/login.tsx  (sesuaikan path)
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -13,23 +14,38 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaProvider,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import Button from "../components/button";
 import { PasswordField, TextField } from "../components/FormControl";
 import { Colors } from "../constants/colors";
 import { Fonts } from "../constants/fonts";
 import { apiFetch } from "../utils/api";
-import { registerForPushNotificationsAsync } from "../utils/notifications";
+import { registerForPushNotificationsAsync } from "../utils/notifications.ts";
 
 function LoginScreenInner() {
   // hooks MUST be called synchronously at top level of component
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
+
+  //const navigation = useNavigation();
+  const handleLoginSuccess = () => {
+    // ✅ Reset seluruh stack dan arahkan ke beranda
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "beranda/beranda" }],
+    });
+  };
 
   // const [email, setEmail] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<{ login?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ login?: string; password?: string }>(
+    {}
+  );
   const [loading, setLoading] = useState(false);
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
@@ -51,75 +67,81 @@ function LoginScreenInner() {
     setAlertTitle(title);
     setAlertVisible(true);
   };
-const handleLogin = async () => {
-  if (!login || !password) {
-    showCustomAlert("Email/NIP dan Password harus diisi", "Alert!!!");
-    return;
-  }
-
-  setErrors({});
-  setLoading(true);
-
-  try {
-    const res = await apiFetch("/login", {
-      method: "POST",
-      body: JSON.stringify({ login, password }),
-    });
-
-    console.log("Login response:", res);
-
-    if (res.status === "success") {
-      const user = res.user;
-      const apiToken = res.token;
-
-      await AsyncStorage.multiSet([
-        ["token", apiToken],
-        ["user", JSON.stringify(user)],
-        ["role", String(user.id_role ?? user.role ?? "")],
-      ]);
-
-      // 🔹 Step 1: Tampilkan loading sebelum register token
-      setAlertVisible(false);
-      showCustomAlert("Menyiapkan notifikasi...", "Mohon Tunggu");
-
-      try {
-        const expoToken = await registerForPushNotificationsAsync();
-
-        if (expoToken) {
-          console.log("Expo Push Token:", expoToken);
-          await apiFetch("/notifikasi/token", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiToken}`,
-            },
-            body: JSON.stringify({
-              token: expoToken,
-              platform: Platform.OS,
-            }),
-          });
-        }
-      } catch (e) {
-        console.warn("Gagal register notifikasi:", e);
-      }
-
-      setTimeout(() => {
-        showCustomAlert(`Selamat datang, ${user.fullname}`, "Login Berhasil");
-        setTimeout(() => {
-          router.replace("/beranda/beranda");
-        }, 500);
-      }, 500);
-    } else {
-      showCustomAlert(res.message ?? "Email/NIP atau password salah", "Login Gagal");
+  const handleLogin = async () => {
+    if (!login || !password) {
+      showCustomAlert("Email/NIP dan Password harus diisi", "Alert!!!");
+      return;
     }
-  } catch (err) {
-    console.error("Login error:", err);
-    showCustomAlert("Email/NIP atau password salah", "Login Gagal");
-  } finally {
-    setLoading(false);
-  }
-};
 
+    setErrors({});
+    setLoading(true);
+
+    try {
+      const res = await apiFetch("/login", {
+        method: "POST",
+        body: JSON.stringify({ login, password }),
+      });
+
+      console.log("Login response:", res);
+
+      if (res.status === "success") {
+        const user = res.user;
+        const apiToken = res.token;
+
+        await AsyncStorage.multiSet([
+          ["token", apiToken],
+          ["user", JSON.stringify(user)],
+          ["role", String(user.id_role ?? user.role ?? "")],
+        ]);
+
+        // 🔹 Step 1: Tampilkan loading sebelum register token
+        setAlertVisible(false);
+        showCustomAlert("Menyiapkan notifikasi...", "Mohon Tunggu");
+
+        try {
+          const expoToken = await registerForPushNotificationsAsync();
+
+          if (expoToken) {
+            console.log("Expo Push Token:", expoToken);
+            await apiFetch("/notifikasi/token", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiToken}`,
+              },
+              body: JSON.stringify({
+                token: expoToken,
+                platform: Platform.OS,
+              }),
+            });
+          }
+        } catch (e) {
+          console.warn("Gagal register notifikasi:", e);
+        }
+
+        setTimeout(() => {
+          showCustomAlert(`Selamat datang, ${user.fullname}`, "Login Berhasil");
+          setTimeout(() => {
+            // ✅ GANTI INI: reset seluruh stack navigation
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "beranda/beranda" }], // ❗ TANPA SLASH DI AWAL
+            });
+          }, 500);
+        }, 500);
+      } else {
+        showCustomAlert(
+          res.message ?? "Email/NIP atau password salah",
+          "Login Gagal"
+        );
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      showCustomAlert("Email/NIP atau password salah", "Login Gagal");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   function CustomAlert({ visible, onClose, title, message }: any) {
     return (
@@ -141,10 +163,14 @@ const handleLogin = async () => {
               alignItems: "center",
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}>
+            <Text
+              style={{ fontSize: 18, fontWeight: "bold", marginBottom: 10 }}
+            >
               {title}
             </Text>
-            <Text style={{ fontSize: 14, textAlign: "center", marginBottom: 20 }}>
+            <Text
+              style={{ fontSize: 14, textAlign: "center", marginBottom: 20 }}
+            >
               {message}
             </Text>
             <TouchableOpacity
@@ -167,27 +193,36 @@ const handleLogin = async () => {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: Colors.navy }}
-      behavior={Platform.OS === "ios" ? "padding" : Platform.OS === "android" ? "height" : undefined}
+      behavior={
+        Platform.OS === "ios"
+          ? "padding"
+          : Platform.OS === "android"
+          ? "height"
+          : undefined
+      }
       keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {loading && (
-  <View
-    style={{
-      position: "absolute",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.4)",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 999,
-    }}
-  >
-    <Text style={{ color: "#fff", fontSize: 16 }}>Memproses...</Text>
-  </View>
-)}
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.4)",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 999,
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 16 }}>Memproses...</Text>
+          </View>
+        )}
 
         {/* Header */}
         <View
@@ -205,10 +240,17 @@ const handleLogin = async () => {
             resizeMode="contain"
           />
           <View style={{ alignItems: "flex-start", width: "90%" }}>
-            <Text style={[Fonts.header1, { color: Colors.white, marginTop: 15 }]}>
+            <Text
+              style={[Fonts.header1, { color: Colors.white, marginTop: 15 }]}
+            >
               Halo, Selamat Datang!
             </Text>
-            <Text style={[Fonts.paragraphRegularSmall, { color: "#e0e0e0", marginTop: 5 }]}>
+            <Text
+              style={[
+                Fonts.paragraphRegularSmall,
+                { color: "#e0e0e0", marginTop: 5 },
+              ]}
+            >
               Akses dokumen dan persuratan kapan saja, dimana saja.
             </Text>
           </View>
@@ -228,7 +270,11 @@ const handleLogin = async () => {
             transform: [{ translateY: slideAnim }],
           }}
         >
-          <Text style={[Fonts.header1, { color: Colors.black, marginBottom: 20 }]}>Login</Text>
+          <Text
+            style={[Fonts.header1, { color: Colors.black, marginBottom: 20 }]}
+          >
+            Login
+          </Text>
 
           <TextField
             label="NIP"

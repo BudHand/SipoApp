@@ -1,30 +1,34 @@
 import Dots from "@/components/Dots";
 import { Colors } from "@/constants/colors";
 import { Stack, useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import PagerView, {
-  PagerViewOnPageSelectedEvent,
-} from "react-native-pager-view";
+import React, { useEffect, useRef, useState } from "react";
+import { Dimensions, ScrollView, StyleSheet, View } from "react-native";
 import Splash2 from "./splash2";
 import Splash3 from "./splash3";
 import Splash4 from "./splash4";
 
+const { width } = Dimensions.get("window");
+
 export default function SplashPager() {
   const [page, setPage] = useState(0);
   const router = useRouter();
-  const pagerRef = useRef<PagerView>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
 
-  // Handle perubahan halaman
-  const handlePageChange = (e: PagerViewOnPageSelectedEvent) => {
-    const position = e.nativeEvent.position;
-    setPage(position);
-
-    if (position === 3) {
-      // Tunggu sebentar biar animasi selesai dulu
-      setTimeout(() => {
+  // Navigasi otomatis ke login saat halaman terakhir
+  useEffect(() => {
+    if (page === 3) {
+      const timer = setTimeout(() => {
         router.replace("/login");
-      }, 200); // 0.2 detik setelah sampai di slide terakhir
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [page, router]);
+
+  const handleScroll = (event: { nativeEvent: { contentOffset: { x: number } } }) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const newPage = Math.round(offsetX / width);
+    if (newPage !== page) {
+      setPage(newPage);
     }
   };
 
@@ -32,29 +36,23 @@ export default function SplashPager() {
     <View style={{ flex: 1, backgroundColor: Colors.white }}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      <PagerView
-        ref={pagerRef}
+      <ScrollView
+        ref={scrollViewRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16} // Penting untuk performa
         style={styles.pager}
-        initialPage={0}
-        onPageSelected={handlePageChange}
       >
-        <View key="2">
-          <Splash2 active={page === 0} />
-        </View>
-        <View key="3">
-          <Splash3 active={page === 1} />
-        </View>
-        <View key="4">
-          <Splash4 active={page === 2} />
-        </View>
-
-        {/* Halaman transisi ke login */}
-        <View key="5" style={styles.lastSlide}>
+        <View style={{ width }}>{Splash2({ active: page === 0 })}</View>
+        <View style={{ width }}>{Splash3({ active: page === 1 })}</View>
+        <View style={{ width }}>{Splash4({ active: page === 2 })}</View>
+        <View style={[styles.lastSlide, { width }]}>
           <View style={styles.transitionCircle} />
         </View>
-      </PagerView>
+      </ScrollView>
 
-      {/* Dots (4 titik: Splash2, 3, 4, dan halaman transisi) */}
       <View style={styles.dotsContainer}>
         <Dots
           total={3}
