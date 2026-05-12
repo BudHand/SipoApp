@@ -1,13 +1,12 @@
-import { Colors } from "@/constants/colors";
-import { Fonts } from "@/constants/fonts";
+import { useTheme } from "@/context/ThemeContext";
 import { apiFetch } from "@/utils/api";
 import { formatTanggalID } from "@/utils/date";
-import { useRouter } from "expo-router";
+import { FontAwesome6 } from "@expo/vector-icons";
+import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   RefreshControl,
   ScrollView,
   StatusBar,
@@ -18,6 +17,77 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const LIGHT = {
+  bg: "#F0F4FA",
+  surface: "#FFFFFF",
+  surface2: "#F5F8FD",
+  border: "rgba(100,140,200,0.13)",
+  borderStrong: "rgba(80,120,190,0.2)",
+  accent: "#1A6FD4",
+  accentBg: "rgba(26,111,212,0.07)",
+  accentBorder: "rgba(26,111,212,0.18)",
+  textPrimary: "#0D1829",
+  textSecondary: "#3A5070",
+  textTertiary: "#7A99BE",
+  textMuted: "#A8C0D8",
+  blue: "#1A6FD4",
+  blueBg: "rgba(26,111,212,0.08)",
+  blueBd: "rgba(26,111,212,0.2)",
+  blueCard: "#EDF3FF",
+  purple: "#6B3FA8",
+  purpleBg: "rgba(107,63,168,0.08)",
+  purpleBd: "rgba(107,63,168,0.2)",
+  purpleCard: "#F4EEFF",
+  green: "#1A8A4A",
+  greenBg: "rgba(26,138,74,0.08)",
+  greenBd: "rgba(26,138,74,0.2)",
+  greenCard: "#EDFBF4",
+  emptyBg: "#EBF3FF",
+  shadowSm: {
+    shadowColor: "#1A3C8C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+};
+
+const DARK = {
+  bg: "#060B18",
+  surface: "#0C1220",
+  surface2: "#0F1828",
+  border: "rgba(255,255,255,0.055)",
+  borderStrong: "rgba(255,255,255,0.1)",
+  accent: "#00D4FF",
+  accentBg: "rgba(0,212,255,0.08)",
+  accentBorder: "rgba(0,212,255,0.18)",
+  textPrimary: "rgba(255,255,255,0.90)",
+  textSecondary: "rgba(255,255,255,0.50)",
+  textTertiary: "rgba(255,255,255,0.28)",
+  textMuted: "rgba(255,255,255,0.15)",
+  blue: "#4AB0FF",
+  blueBg: "rgba(0,132,255,0.13)",
+  blueBd: "rgba(0,132,255,0.25)",
+  blueCard: "#0A1628",
+  purple: "#BB88FF",
+  purpleBg: "rgba(120,80,255,0.13)",
+  purpleBd: "rgba(120,80,255,0.25)",
+  purpleCard: "#120A28",
+  green: "#00CC80",
+  greenBg: "rgba(0,200,120,0.13)",
+  greenBd: "rgba(0,200,120,0.25)",
+  greenCard: "#0A2018",
+  emptyBg: "rgba(0,212,255,0.07)",
+  shadowSm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+};
+
+type ThemeColors = typeof LIGHT;
 type ItemType = "memo" | "undangan" | "risalah";
 
 interface ApprovalItem {
@@ -25,84 +95,50 @@ interface ApprovalItem {
   type: ItemType;
   title: string;
   date: string | Date;
-  isEmpty?: boolean;
+  status?: string;
 }
 
-interface ApprovalResponse {
-  memo?: {
-    id?: number;
-    judul?: string;
-    updated_at?: string;
-  };
-  undangan?: {
-    id?: number;
-    judul?: string;
-    updated_at?: string;
-  };
-  risalah?: {
-    id?: number;
-    judul?: string;
-    updated_at?: string;
-  };
+interface ApprovalApiItem {
+  id: number | string;
+  judul?: string;
+  tgl_dokumen?: string;
+  tipe: ItemType;
+  status?: string;
 }
 
 export default function ApprovalIndex() {
   const router = useRouter();
+  const { isDark, toggleDark } = useTheme();
+  const C: ThemeColors = isDark ? DARK : LIGHT;
+
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ApprovalItem[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const loadApprovals = useCallback(async () => {
     try {
-      setError(null);
       const response = await apiFetch("/approval");
-      const data: ApprovalResponse = response?.data || {};
 
-      const approvalItems: ApprovalItem[] = [];
+      const data: ApprovalApiItem[] = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
 
-      // Process Memo
-      if (data.memo && data.memo.judul) {
-        approvalItems.push({
-          id: data.memo.id || `memo-${Date.now()}`,
-          type: "memo",
-          title: data.memo.judul,
-          date: data.memo.updated_at || new Date(),
-          isEmpty: false,
-        });
-      }
+      const list: ApprovalItem[] = data
+        .filter((item) => item.id && item.tipe)
+        .map((item) => ({
+          id: item.id,
+          type: item.tipe,
+          title: item.judul || "Dokumen tidak ditemukan",
+          date: item.tgl_dokumen || new Date(),
+          status: item.status,
+        }));
 
-      // Process Undangan
-      if (data.undangan && data.undangan.judul) {
-        approvalItems.push({
-          id: data.undangan.id || `undangan-${Date.now()}`,
-          type: "undangan",
-          title: data.undangan.judul,
-          date: data.undangan.updated_at || new Date(),
-          isEmpty: false,
-        });
-      }
-
-      // Process Risalah
-      if (data.risalah && data.risalah.judul) {
-        approvalItems.push({
-          id: data.risalah.id || `risalah-${Date.now()}`,
-          type: "risalah",
-          title: data.risalah.judul,
-          date: data.risalah.updated_at || new Date(),
-          isEmpty: false,
-        });
-      }
-
-      setItems(approvalItems);
-    } catch (err: any) {
+      setItems(list);
+    } catch (err) {
       console.error("Error loading approvals:", err);
-      setError(err?.message || "Gagal memuat data approval");
-      Alert.alert(
-        "Error",
-        "Gagal memuat data approval. Silakan coba lagi.",
-        [{ text: "OK" }]
-      );
+      Alert.alert("Error", "Gagal memuat data approval. Silakan coba lagi.");
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -118,304 +154,651 @@ export default function ApprovalIndex() {
     loadApprovals();
   }, [loadApprovals]);
 
-  const handleNavigate = (type: ItemType) => {
-    const routes = {
-      memo: "/memo/memos",
-      undangan: "/undangan/undangan",
-      risalah: "/risalah/risalah",
-    };
+  const handleNavigate = (item: ApprovalItem) => {
+    switch (item.type) {
+      case "memo":
+        router.push({
+          pathname: "/memo/memo-detail" as any,
+          params: {
+            id: String(item.id),
+            jenis: "keluar",
+            source: "approval",
+            from: "approval",
+          },
+        });
+        break;
 
-    router.push({
-      pathname: routes[type] as any,
-      params: { approval: "1" },
-    });
+      case "undangan":
+        router.push({
+          pathname: "/undangan/undangan-detail" as any,
+          params: {
+            id: String(item.id),
+            jenis: "keluar",
+            source: "approval",
+            from: "approval",
+          },
+        });
+        break;
+
+      case "risalah":
+        router.push({
+          pathname: "/risalah/risalah-detail" as any,
+          params: {
+            id: String(item.id),
+            source: "approval",
+            from: "approval",
+          },
+        });
+        break;
+    }
   };
 
-  // Loading State
+  const getTypeStyle = (type: ItemType) => {
+    switch (type) {
+      case "memo":
+        return {
+          c: C.blue,
+          bg: C.blueBg,
+          bd: C.blueBd,
+          card: C.blueCard,
+          icon: "envelope" as const,
+          label: "Memo",
+        };
+
+      case "undangan":
+        return {
+          c: C.purple,
+          bg: C.purpleBg,
+          bd: C.purpleBd,
+          card: C.purpleCard,
+          icon: "calendar-check" as const,
+          label: "Undangan",
+        };
+
+      case "risalah":
+        return {
+          c: C.green,
+          bg: C.greenBg,
+          bd: C.greenBd,
+          card: C.greenCard,
+          icon: "file-lines" as const,
+          label: "Risalah",
+        };
+    }
+  };
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.centerContainer} edges={["top"]}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F7F8FA" />
-        <ActivityIndicator size="large" color={Colors.navy} />
-        <Text style={[Fonts.paragraphMediumSmall, styles.loadingText]}>
-          Memuat data approval...
-        </Text>
-      </SafeAreaView>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+
+        <SafeAreaView
+          style={[s.centerContainer, { backgroundColor: C.bg }]}
+          edges={["top"]}
+        >
+          <StatusBar
+            barStyle={isDark ? "light-content" : "dark-content"}
+            backgroundColor={C.bg}
+          />
+
+          <View
+            style={[
+              s.loadingIconWrap,
+              { backgroundColor: C.accentBg, borderColor: C.accentBorder },
+            ]}
+          >
+            <ActivityIndicator size="large" color={C.accent} />
+          </View>
+
+          <Text style={[s.loadingText, { color: C.textTertiary }]}>
+            Memuat data approval...
+          </Text>
+        </SafeAreaView>
+      </>
     );
   }
 
-  // Empty State
   const isEmpty = items.length === 0;
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.white} />
-      
-      {/* Header - Di luar ScrollView agar selalu di atas */}
-      <View style={styles.header}>
-        <Text style={[Fonts.header1, styles.headerTitle]}>Approval</Text>
-        <Text style={[Fonts.paragraphRegularSmall, styles.headerSubtitle]}>
-          Daftar dokumen menunggu persetujuan
-        </Text>
-      </View>
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          isEmpty && styles.scrollContentCentered,
-        ]}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[Colors.navy]}
-            tintColor={Colors.navy}
-          />
-        }
-      >
-        {/* Empty State */}
-        {isEmpty ? (
-          <View style={styles.emptyStateContainer}>
-            <View style={styles.emptyIconWrapper}>
-              <Image
-                source={require("@/assets/icons/signature/signature_fill_yellow.png")}
-                style={styles.emptyIcon}
-                resizeMode="contain"
-              />
-            </View>
-            <Text style={[Fonts.header6, styles.emptyTitle]}>
-              Belum Ada Approval
-            </Text>
-            <Text style={[Fonts.paragraphRegularSmall, styles.emptyMessage]}>
-              Saat ini tidak ada dokumen yang{"\n"}menunggu persetujuan Anda
-            </Text>
-          </View>
-        ) : (
-          /* Approval List */
-          <View style={styles.listContainer}>
-            {items.map((item) => (
-              <ApprovalCard
-                key={item.id}
-                item={item}
-                onPress={() => handleNavigate(item.type)}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-/* ========== Approval Card Component ========== */
-interface ApprovalCardProps {
-  item: ApprovalItem;
-  onPress: () => void;
-}
-
-function ApprovalCard({ item, onPress }: ApprovalCardProps) {
-  const { type, title, date } = item;
-
-  return (
-    <TouchableOpacity
-      style={[styles.card, getCardBackground(type)]}
-      activeOpacity={0.7}
-      onPress={onPress}
-    >
-      <View style={[styles.iconBox, getIconBackground(type)]}>
-        <Image
-          source={getIconSource(type)}
-          style={styles.iconImage}
-          resizeMode="contain"
+      <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={["top"]}>
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor={C.bg}
         />
-      </View>
 
-      <View style={styles.cardContent}>
-        <Text style={[Fonts.paragraphMediumLarge, styles.cardTitle]}>
-          Persetujuan {capitalizeFirst(type)}
-        </Text>
+        <View
+          style={[
+            s.orb1,
+            {
+              backgroundColor: isDark
+                ? "rgba(0,132,255,0.10)"
+                : "rgba(26,111,212,0.06)",
+            },
+          ]}
+          pointerEvents="none"
+        />
 
-        <Text style={[Fonts.paragraphMediumSmall, styles.cardLabel]}>
-          {getTypeLabel(type)}{" "}
-          <Text style={[Fonts.paragraphRegularSmall, styles.cardValue]}>
-            {title}
-          </Text>
-        </Text>
+        <View
+          style={[
+            s.orb2,
+            {
+              backgroundColor: isDark
+                ? "rgba(0,255,198,0.06)"
+                : "rgba(107,63,168,0.04)",
+            },
+          ]}
+          pointerEvents="none"
+        />
 
-        <Text style={[Fonts.paragraphMediumSmall, styles.cardLabel]}>
-          Hari, Tanggal:{" "}
-          <Text style={[Fonts.paragraphRegularSmall, styles.cardValue]}>
-            {formatTanggalID(date)}
-          </Text>
-        </Text>
-      </View>
+        <View style={[s.header, { borderBottomColor: C.border }]}>
+          <View style={s.headerLeft}>
+            <TouchableOpacity
+              style={[
+                s.backBtn,
+                {
+                  backgroundColor: C.surface,
+                  borderColor: C.borderStrong,
+                },
+                C.shadowSm,
+              ]}
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace("/home");
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <FontAwesome6
+                name="chevron-left"
+                size={13}
+                color={C.textSecondary}
+              />
+            </TouchableOpacity>
 
-      <View style={styles.chevronWrapper}>
-        <Text style={[Fonts.header3, styles.chevron]}>›</Text>
-      </View>
-    </TouchableOpacity>
+            <View
+              style={[
+                s.headerIconWrap,
+                { backgroundColor: C.accentBg, borderColor: C.accentBorder },
+              ]}
+            >
+              <FontAwesome6 name="shield-halved" size={16} color={C.accent} />
+            </View>
+
+            <View>
+              <Text style={[s.headerTitle, { color: C.textPrimary }]}>
+                Approval
+              </Text>
+
+              <Text style={[s.headerSub, { color: C.textTertiary }]}>
+                {isEmpty
+                  ? "Tidak ada dokumen menunggu"
+                  : `${items.length} dokumen menunggu persetujuan`}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              s.themeBtn,
+              { backgroundColor: C.surface, borderColor: C.borderStrong },
+              C.shadowSm,
+            ]}
+            onPress={toggleDark}
+            activeOpacity={0.7}
+          >
+            <FontAwesome6
+              name={isDark ? "moon" : "sun"}
+              size={13}
+              color={C.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView
+          contentContainerStyle={[s.scrollContent, isEmpty && s.scrollCentered]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[C.accent]}
+              tintColor={C.accent}
+              progressBackgroundColor={C.surface}
+            />
+          }
+        >
+          {isEmpty ? (
+            <View style={s.emptyWrap}>
+              <View
+                style={[
+                  s.emptyOrb,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(0,212,255,0.06)"
+                      : "rgba(26,111,212,0.05)",
+                  },
+                ]}
+              />
+
+              <View
+                style={[
+                  s.emptyIconRing,
+                  { backgroundColor: C.emptyBg, borderColor: C.accentBorder },
+                ]}
+              >
+                <View
+                  style={[s.emptyIconInner, { backgroundColor: C.accentBg }]}
+                >
+                  <FontAwesome6
+                    name="circle-check"
+                    size={32}
+                    color={C.accent}
+                  />
+                </View>
+              </View>
+
+              <Text style={[s.emptyTitle, { color: C.textPrimary }]}>
+                Semua Beres!
+              </Text>
+
+              <Text style={[s.emptyDesc, { color: C.textTertiary }]}>
+                Tidak ada dokumen yang{"\n"}menunggu persetujuan Anda
+              </Text>
+
+              <View
+                style={[
+                  s.emptyBadge,
+                  { backgroundColor: C.accentBg, borderColor: C.accentBorder },
+                ]}
+              >
+                <FontAwesome6 name="check" size={10} color={C.accent} />
+                <Text style={[s.emptyBadgeText, { color: C.accent }]}>
+                  Semua dokumen telah diproses
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={s.listContainer}>
+              <View
+                style={[
+                  s.countBadge,
+                  { backgroundColor: C.surface, borderColor: C.borderStrong },
+                  C.shadowSm,
+                ]}
+              >
+                <View style={[s.countDot, { backgroundColor: C.accent }]} />
+                <Text style={[s.countText, { color: C.textSecondary }]}>
+                  {items.length} dokumen menunggu tindakan
+                </Text>
+              </View>
+
+              {items.map((item) => {
+                const st = getTypeStyle(item.type);
+
+                return (
+                  <TouchableOpacity
+                    key={`${item.type}-${item.id}`}
+                    style={[
+                      s.card,
+                      {
+                        backgroundColor: st.card,
+                        borderColor: C.borderStrong,
+                      },
+                      C.shadowSm,
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() => handleNavigate(item)}
+                  >
+                    <View style={[s.cardGlow, { backgroundColor: st.bg }]} />
+                    <View
+                      style={[s.cardAccentLine, { backgroundColor: st.c }]}
+                    />
+
+                    <View
+                      style={[
+                        s.cardIconWrap,
+                        { backgroundColor: st.bg, borderColor: st.bd },
+                      ]}
+                    >
+                      <FontAwesome6 name={st.icon} size={18} color={st.c} />
+                    </View>
+
+                    <View style={s.cardContent}>
+                      <View style={s.cardTopRow}>
+                        <View
+                          style={[
+                            s.typePill,
+                            { backgroundColor: st.bg, borderColor: st.bd },
+                          ]}
+                        >
+                          <Text style={[s.typePillText, { color: st.c }]}>
+                            {st.label.toUpperCase()}
+                          </Text>
+                        </View>
+
+                        <Text style={[s.cardDate, { color: C.textMuted }]}>
+                          {formatTanggalID(item.date)}
+                        </Text>
+                      </View>
+
+                      <Text
+                        style={[s.cardTitle, { color: C.textPrimary }]}
+                        numberOfLines={2}
+                      >
+                        {item.title}
+                      </Text>
+
+                      <View
+                        style={[s.cardAction, { borderTopColor: C.border }]}
+                      >
+                        <Text style={[s.cardActionText, { color: st.c }]}>
+                          Tinjau dokumen
+                        </Text>
+                        <FontAwesome6
+                          name="arrow-right"
+                          size={10}
+                          color={st.c}
+                        />
+                      </View>
+                    </View>
+
+                    <FontAwesome6
+                      name="chevron-right"
+                      size={11}
+                      color={C.textMuted}
+                      style={s.cardChevron}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </>
   );
 }
 
-/* ========== Helper Functions ========== */
-function getCardBackground(type: ItemType) {
-  const backgrounds = {
-    memo: { backgroundColor: Colors.memo_card_bg },
-    undangan: { backgroundColor: Colors.undangan_card_bg },
-    risalah: { backgroundColor: Colors.risalah_card_bg },
-  };
-  return backgrounds[type];
-}
+const s = StyleSheet.create({
+  safe: { flex: 1 },
 
-function getIconBackground(type: ItemType) {
-  const backgrounds = {
-    memo: { backgroundColor: Colors.memo_card_bg_icon },
-    undangan: { backgroundColor: Colors.undangan_card_bg_icon },
-    risalah: { backgroundColor: Colors.risalah_card_bg_icon },
-  };
-  return backgrounds[type];
-}
-
-function getIconSource(type: ItemType) {
-  const icons = {
-    memo: require("@/assets/icons/memo/memo_blue.png"),
-    undangan: require("@/assets/icons/undangan/undangan_purple.png"),
-    risalah: require("@/assets/icons/risalah/risalah_green.png"),
-  };
-  return icons[type];
-}
-
-function getTypeLabel(type: ItemType) {
-  const labels = {
-    memo: "Memo Terbaru:",
-    undangan: "Undangan Terbaru:",
-    risalah: "Risalah Terbaru:",
-  };
-  return labels[type];
-}
-
-function capitalizeFirst(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-/* ========== Styles ========== */
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.white,
-  },
   centerContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#F7F8FA",
+    gap: 14,
+  },
+  loadingIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
   loadingText: {
-    marginTop: 12,
-    color: Colors.textSecondary,
+    fontSize: 13,
+    fontWeight: "600",
+    letterSpacing: 0.2,
   },
+
+  orb1: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    top: -80,
+    right: -80,
+    zIndex: 0,
+  },
+  orb2: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    top: 220,
+    left: -60,
+    zIndex: 0,
+  },
+
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    borderBottomWidth: 0.5,
+    zIndex: 1,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  headerIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+  headerSub: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+    letterSpacing: 0.1,
+  },
+  themeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   scrollContent: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 100,
+    zIndex: 1,
   },
-  scrollContentCentered: {
+  scrollCentered: {
     flexGrow: 1,
     justifyContent: "center",
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 0,
-    backgroundColor: Colors.white,
-  },
-  headerTitle: {
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    color: Colors.textSecondary,
-  },
 
-  // Empty State
-  emptyStateContainer: {
+  emptyWrap: {
+    alignItems: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 32,
+    gap: 12,
+    position: "relative",
+  },
+  emptyOrb: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    top: 0,
+    alignSelf: "center",
+  },
+  emptyIconRing: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    borderWidth: 0.5,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
-    paddingHorizontal: 40,
+    marginBottom: 8,
   },
-  emptyIconWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: "#FFF9E6",
-    justifyContent: "center",
+  emptyIconInner: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     alignItems: "center",
-    marginBottom: 24,
-  },
-  emptyIcon: {
-    width: 64,
-    height: 64,
+    justifyContent: "center",
   },
   emptyTitle: {
-    color: Colors.textPrimary,
-    marginBottom: 8,
-    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
   },
-  emptyMessage: {
-    color: Colors.textSecondary,
+  emptyDesc: {
+    fontSize: 13,
+    fontWeight: "500",
     textAlign: "center",
     lineHeight: 20,
+    letterSpacing: 0.1,
   },
-
-  // List
-  listContainer: {
-    gap: 14,
-  },
-
-  // Card
-  card: {
+  emptyBadge: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    gap: 6,
+    marginTop: 4,
+    borderWidth: 0.5,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  iconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
-    justifyContent: "center",
+  emptyBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+
+  countBadge: {
+    flexDirection: "row",
     alignItems: "center",
-    marginRight: 14,
+    gap: 8,
+    borderWidth: 0.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 14,
   },
-  iconImage: {
-    width: 32,
-    height: 32,
+  countDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+  },
+
+  listContainer: {
+    gap: 12,
+  },
+
+  card: {
+    borderRadius: 18,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingTop: 16,
+    paddingBottom: 0,
+    paddingRight: 14,
+    paddingLeft: 0,
+    position: "relative",
+  },
+  cardGlow: {
+    position: "absolute",
+    top: -30,
+    right: -30,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  cardAccentLine: {
+    width: 3.5,
+    height: "100%",
+    borderRadius: 2,
+    marginRight: 14,
+    alignSelf: "stretch",
+    minHeight: 80,
+  },
+  cardIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    marginRight: 12,
   },
   cardContent: {
     flex: 1,
+    minWidth: 0,
+    paddingBottom: 0,
+  },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 7,
+  },
+  typePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 0.5,
+  },
+  typePillText: {
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+  },
+  cardDate: {
+    fontSize: 10,
+    fontWeight: "500",
   },
   cardTitle: {
-    color: Colors.textPrimary,
-    marginBottom: 6,
+    fontSize: 13.5,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+    lineHeight: 19,
+    marginBottom: 10,
   },
-  cardLabel: {
-    color: Colors.textSecondary,
-    marginBottom: 2,
+  cardAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderTopWidth: 0.5,
+    paddingTop: 10,
+    paddingBottom: 14,
   },
-  cardValue: {
-    color: Colors.textSecondary,
+  cardActionText: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.2,
   },
-  chevronWrapper: {
+  cardChevron: {
     marginLeft: 8,
-    justifyContent: "center",
+    flexShrink: 0,
   },
-  chevron: {
-    color: Colors.textPrimary,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

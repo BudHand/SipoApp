@@ -1,4 +1,6 @@
+// app/(or src)/login.tsx  (sesuaikan path)
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -10,7 +12,7 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import {
   SafeAreaProvider,
@@ -24,26 +26,33 @@ import { apiFetch } from "../utils/api";
 import { registerForPushNotificationsAsync } from "../utils/notifications";
 
 function LoginScreenInner() {
-  const insets = useSafeAreaInsets(); // ambil inset top & bottom
-  const [email, setEmail] = useState("");
+  // hooks MUST be called synchronously at top level of component
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const navigation = useNavigation();
+
+  //const navigation = useNavigation();
+  const handleLoginSuccess = () => {
+    // ✅ Reset seluruh stack dan arahkan ke beranda
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "beranda/beranda" }],
+    });
+  };
+
+  // const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>(
+  const [errors, setErrors] = useState<{ login?: string; password?: string }>(
     {}
   );
   const [loading, setLoading] = useState(false);
-  const slideAnim = useRef(new Animated.Value(200)).current;
-  const router = useRouter();
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
   const [alertTitle, setAlertTitle] = useState("Info");
 
+  const slideAnim = useRef(new Animated.Value(200)).current;
   const passwordRef = useRef<any>(null);
-
-  const showCustomAlert = (msg: string, title: string = "Info") => {
-    setAlertMsg(msg);
-    setAlertTitle(title);
-    setAlertVisible(true);
-  };
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -53,70 +62,82 @@ function LoginScreenInner() {
     }).start();
   }, [slideAnim]);
 
+  const showCustomAlert = (msg: string, title: string = "Info") => {
+    setAlertMsg(msg);
+    setAlertTitle(title);
+    setAlertVisible(true);
+  };
   const handleLogin = async () => {
-    let newErrors: { email?: string; password?: string } = {};
-    if (!email || !password) {
-      showCustomAlert("Email dan Password harus diisi", "Error");
+    if (!login || !password) {
+      showCustomAlert("Email/NIP dan Password harus diisi", "Alert!!!");
       return;
     }
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+
     setErrors({});
     setLoading(true);
 
     try {
       const res = await apiFetch("/login", {
         method: "POST",
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ login, password }),
       });
-      console.log(res);
+
+      console.log("Login response:", res);
+
       if (res.status === "success") {
-        await AsyncStorage.setItem("token", res.token);
-        await AsyncStorage.setItem("user", JSON.stringify(res.user));
-        await AsyncStorage.setItem("role", String(res.user.role));
+        const user = res.user;
+        const apiToken = res.token;
 
-        await registerForPushNotificationsAsync().then(async (token) => {
-          if (token) {
-            console.log("Notification Token:", token);
+        await AsyncStorage.multiSet([
+          ["token", apiToken],
+          ["user", JSON.stringify(user)],
+          ["role", String(user.id_role ?? user.role ?? "")],
+        ]);
 
+        // 🔹 Step 1: Tampilkan loading sebelum register token
+        setAlertVisible(false);
+        showCustomAlert("Menyiapkan notifikasi...", "Mohon Tunggu");
+
+        try {
+          const expoToken = await registerForPushNotificationsAsync();
+
+          if (expoToken) {
+            console.log("Expo Push Token:", expoToken);
             await apiFetch("/notifikasi/token", {
               method: "POST",
               headers: {
-                "Content-Type": "application/json", // ✅ make sure Laravel sees JSON
-                Authorization: `Bearer ${res.token}`, // ✅ token from your login response
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiToken}`,
               },
-              body: JSON.stringify({ token }),
+              body: JSON.stringify({
+                token: expoToken,
+                platform: Platform.OS,
+              }),
             });
           }
-        });
-        // const tokenNotif = await registerForPushNotificationsAsync();
-        // if (tokenNotif) {
-        //   console.log("✅ Notification Token:", tokenNotif);
-        //   await apiFetch("/notifikasi/token", {
-        //     method: "POST",
-        //     headers: {
-        //       "Content-Type": "application/json",
-        //       Authorization: `Bearer ${res.token}`,
-        //     },
-        //     body: JSON.stringify({ notification_token: tokenNotif }),
-        //   });
-        // }
+        } catch (e) {
+          console.warn("Gagal register notifikasi:", e);
+        }
 
-
-        console.log(await AsyncStorage.getItem("role"));
-        showCustomAlert(
-          `Selamat datang, ${res.user.fullname}`,
-          "Login Berhasil"
-        );
-        router.replace("/beranda/beranda");
+        setTimeout(() => {
+          showCustomAlert(`Selamat datang, ${user.fullname}`, "Login Berhasil");
+          setTimeout(() => {
+            // ✅ GANTI INI: reset seluruh stack navigation
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "beranda/beranda" }], // ❗ TANPA SLASH DI AWAL
+            });
+          }, 500);
+        }, 500);
       } else {
-        showCustomAlert("Email atau password salah", "Login Gagal");
+        showCustomAlert(
+          res.message ?? "Email/NIP atau password salah",
+          "Login Gagal"
+        );
       }
-    } catch (err: any) {
-      console.error(err);
-      showCustomAlert("Terjadi kesalahan. Coba lagi.", "Error");
+    } catch (err) {
+      console.error("Login error:", err);
+      showCustomAlert("Email/NIP atau password salah", "Login Gagal");
     } finally {
       setLoading(false);
     }
@@ -154,7 +175,7 @@ function LoginScreenInner() {
             </Text>
             <TouchableOpacity
               style={{
-                backgroundColor: "#1E40AF",
+                backgroundColor: "#1E3A8A",
                 paddingVertical: 10,
                 paddingHorizontal: 20,
                 borderRadius: 8,
@@ -173,19 +194,47 @@ function LoginScreenInner() {
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: Colors.navy }}
       behavior={
-        Platform.OS === "ios" || Platform.OS === "android"
+        Platform.OS === "ios"
           ? "padding"
+          : Platform.OS === "android"
+          ? "height"
           : undefined
       }
+      // keyboardVerticalOffset={
+      //   Platform.OS === "ios"
+      //   ? insets.top : 0
+      // }
+      // keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 20}
     >
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1 }}
+    <ScrollView
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ 
+          flexGrow: 1,
+          paddingBottom: 0,
+      }}
       >
-        {/* HEADER */}
+        {loading && (
+          <View
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.4)",
+              justifyContent: "center",
+              alignItems: "center",
+              zIndex: 999,
+            }}
+          >
+            <Text style={{ color: "#fff", fontSize: 16 }}>Memproses...</Text>
+          </View>
+        )}
+
+        {/* Header */}
         <View
           style={{
-            paddingTop: insets.top, // safe area top navy
+            paddingTop: insets.top,
             justifyContent: "center",
             alignItems: "center",
             padding: 20,
@@ -193,8 +242,8 @@ function LoginScreenInner() {
           }}
         >
           <Image
-            source={require("../assets/images/login-graphic.png")}
-            style={{ width: 350, height: 300, marginBottom: 10 }}
+            source={require("../assets/images/login-sipo.png")}
+            style={{ width: 340, height: 350, marginBottom: 10 }}
             resizeMode="contain"
           />
           <View style={{ alignItems: "flex-start", width: "90%" }}>
@@ -214,17 +263,18 @@ function LoginScreenInner() {
           </View>
         </View>
 
-        {/* LOGIN BOX */}
+        {/* Login box */}
         <Animated.View
           style={{
-            flex: 2,
+            // flex: 2,
+            flexGrow: 1,
             backgroundColor: Colors.white,
             borderTopLeftRadius: 30,
             borderTopRightRadius: 30,
             paddingHorizontal: 24,
             paddingVertical: 25,
-            paddingBottom: insets.bottom, // safe area bottom putih
-            transform: [{ translateY: slideAnim }],
+            // paddingBottom: insets.bottom,
+            // transform: [{ translateY: slideAnim }],
           }}
         >
           <Text
@@ -233,43 +283,31 @@ function LoginScreenInner() {
             Login
           </Text>
 
-          {/* Email */}
           <TextField
-            label="Email"
-            placeholder="email..."
-            value={email}
-            onChangeText={setEmail}
-            helperText={errors.email}
-            status={errors.email ? "error" : "default"}
+            label="NIP"
+            placeholder="Masukkan NIP..."
+            value={login}
+            onChangeText={setLogin}
+            helperText={errors.login}
+            status={errors.login ? "error" : "default"}
             autoCapitalize="none"
-            keyboardType="email-address"
+            keyboardType="default"
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
           />
-
-          {/* Password */}
           <PasswordField
             label="Password"
-            placeholder="password..."
+            placeholder="Masukkan Password..."
             value={password}
             onChangeText={setPassword}
             helperText={errors.password}
             status={errors.password ? "error" : "default"}
             autoCapitalize="none"
-            secureTextEntry={true}
+            secureTextEntry
             ref={passwordRef}
             returnKeyType="done"
             onSubmitEditing={handleLogin}
           />
-
-          {/* Forgot Password */}
-          {/* <TouchableOpacity
-            style={{ alignItems: "flex-end", marginVertical: 10 }}
-          >
-            <Text style={[Fonts.paragraphMediumSmall, { color: Colors.navy }]}>
-              Forgot Password ?
-            </Text>
-          </TouchableOpacity> */}
 
           <Button
             title={loading ? "Loading..." : "Login"}
@@ -292,6 +330,7 @@ function LoginScreenInner() {
 }
 
 export default function LoginScreen() {
+  // wrap with SafeAreaProvider only once at root (ok to keep it here if not provided globally)
   return (
     <SafeAreaProvider>
       <LoginScreenInner />

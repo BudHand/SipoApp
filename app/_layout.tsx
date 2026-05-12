@@ -1,4 +1,6 @@
+// app/_layout.tsx
 import BottomNav from "@/components/BottomNav";
+import { ThemeProvider, useTheme } from "@/context/ThemeContext";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import {
   Inter_400Regular,
@@ -10,9 +12,14 @@ import {
 import {
   DarkTheme,
   DefaultTheme,
-  ThemeProvider,
+  ThemeProvider as NavThemeProvider,
 } from "@react-navigation/native";
-import { Stack, useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import {
+  Stack,
+  useGlobalSearchParams,
+  usePathname,
+  useRouter,
+} from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { BackHandler, ToastAndroid, View } from "react-native";
@@ -27,46 +34,37 @@ const groupsWithBottomNav = [
   "/undangan",
   "/approval",
   "/risalah",
+  "/disposisi",
 ];
 
-export default function RootLayout() {
-  // ✅ Semua hooks dipanggil di atas (tanpa kondisi)
-  const [fontsLoaded] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-  });
+// ─── Inner layout (has access to ThemeContext) ────────────────────────────────
+
+function RootLayoutInner() {
   const colorScheme = useColorScheme();
   const pathname = usePathname();
   const params = useGlobalSearchParams();
   const router = useRouter();
+  const { isDark } = useTheme();
 
-useEffect(() => {
-  const sub = BackHandler.addEventListener(
-    "hardwareBackPress",
-    () => {
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       console.log("BACK:", pathname);
 
-      if (
-        pathname == "/login" || 
-        pathname.startsWith("/splash")
-      ) {
+      if (pathname == "/login" || pathname.startsWith("/splash")) {
         return true;
       }
 
       if (pathname === "/beranda/beranda") {
-        if (global.lastBackPressed &&
-            Date.now() - global.lastBackPressed < 2000) {
+        if (
+          global.lastBackPressed &&
+          Date.now() - global.lastBackPressed < 2000
+        ) {
           BackHandler.exitApp();
           return true;
         }
 
         global.lastBackPressed = Date.now();
-        ToastAndroid.show(
-          "Tekan sekali lagi untuk keluar",
-          ToastAndroid.SHORT
-        );
+        ToastAndroid.show("Tekan sekali lagi untuk keluar", ToastAndroid.SHORT);
         return true;
       }
 
@@ -74,44 +72,33 @@ useEffect(() => {
         router.back();
         return true;
       }
-      
-      
-      BackHandler.exitApp(); 
+
+      BackHandler.exitApp();
       return true;
-    }
-  );
+    });
 
-  return () => sub.remove();
-}, [pathname]);
-  // ✅ Hitung nilai-nilai yang diperlukan
+    return () => sub.remove();
+  }, [pathname]);
+
   const showBottomNav = groupsWithBottomNav.some((p) => pathname.startsWith(p));
-  const direction = params.animationDirection || "right";
-
-  // ✅ Return null SETELAH semua hooks dipanggil
-  if (!fontsLoaded) {
-    return null;
-  }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+    <NavThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <View style={{ flex: 1 }}>
         <Stack
           initialRouteName="splash/splash1"
           screenOptions={{
-            // 🔥 FIX: Disable gesture swipe back di iOS untuk mencegah kembali ke login
             gestureEnabled: false,
-            // Alternatif: Hanya disable di iOS, tetap enable di Android
-            // gestureEnabled: Platform.OS !== 'ios',
             animation: "default",
           }}
         >
-          {/* Beranda  */}
+          {/* Beranda */}
           <Stack.Screen
             name="beranda/beranda"
             options={{ headerShown: false }}
           />
 
-          {/* Notifikasi  */}
+          {/* Notifikasi */}
           <Stack.Screen
             name="notifikasi/notifikasi"
             options={{ headerShown: false }}
@@ -138,11 +125,7 @@ useEffect(() => {
           {/* Main */}
           <Stack.Screen
             name="login"
-            options={{
-              headerShown: false,
-              // 🔥 FIX: Pastikan tidak bisa swipe back dari halaman lain ke login
-              gestureEnabled: false,
-            }}
+            options={{ headerShown: false, gestureEnabled: false }}
           />
           <Stack.Screen
             name="modal"
@@ -178,16 +161,35 @@ useEffect(() => {
 
         <StatusBar style="auto" />
 
-        {/* tampilkan hanya di folder yang diizinkan */}
+        {/* BottomNav menerima isDark dari Context */}
         {showBottomNav && (
           <View
             pointerEvents="box-none"
             style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}
           >
-            <BottomNav />
+            <BottomNav isDark={isDark} />
           </View>
         )}
       </View>
+    </NavThemeProvider>
+  );
+}
+
+// ─── Root (wraps everything with ThemeProvider & font loading) ────────────────
+
+export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  if (!fontsLoaded) return null;
+
+  return (
+    <ThemeProvider>
+      <RootLayoutInner />
     </ThemeProvider>
   );
 }

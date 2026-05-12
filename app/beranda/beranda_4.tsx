@@ -1,5 +1,3 @@
-// app/beranda/beranda.tsx
-import { useTheme } from "@/context/ThemeContext";
 import { apiFetch } from "@/utils/api";
 import { formatTanggalID } from "@/utils/date";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -41,10 +39,12 @@ const LIGHT = {
   orb1: "rgba(26,111,212,0.06)",
   orb2: "rgba(42,136,245,0.04)",
   panelTopLine: "rgba(26,111,212,0.25)",
+  // doc cards
   card1Bg: "#EDF3FF",
   card2Bg: "#F4EEFF",
   card3Bg: "#EDFBF4",
   card4Bg: "#FFFBEE",
+  // quick actions
   qa1: "#EBF3FF",
   qa2: "#EEF2FF",
   qa3: "#F2EEFF",
@@ -52,12 +52,14 @@ const LIGHT = {
   qa5: "#EDFAF3",
   qa6: "#FFF9EE",
   qa7: "#F0F4FA",
+  // badge
   badgeNowBg: "rgba(26,158,90,0.09)",
   badgeNowBd: "rgba(26,158,90,0.22)",
   badgeNowC: "#1A7A48",
   badgeSoonBg: "rgba(192,112,16,0.08)",
   badgeSoonBd: "rgba(192,112,16,0.22)",
   badgeSoonC: "#A06010",
+  // shadows
   shadowSm: {
     shadowColor: "#1A3C8C",
     shadowOffset: { width: 0, height: 1 },
@@ -127,6 +129,7 @@ const DARK = {
   },
 };
 
+// Per-theme icon/accent colors (same keys for light & dark)
 const ICON_COLORS = {
   light: {
     blue: "#1A6FD4",
@@ -160,6 +163,8 @@ const ICON_COLORS = {
   },
 };
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type ThemeColors = typeof LIGHT;
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -167,8 +172,7 @@ type ThemeColors = typeof LIGHT;
 export default function BerandaScreen() {
   const router = useRouter();
 
-  // ✅ Gunakan context — isDark sekarang ter-share ke BottomNav via _layout
-  const { isDark, toggleDark } = useTheme();
+  const [isDark, setIsDark] = useState(false);
   const C: ThemeColors = isDark ? DARK : LIGHT;
   const IC = isDark ? ICON_COLORS.dark : ICON_COLORS.light;
 
@@ -332,6 +336,8 @@ export default function BerandaScreen() {
     }
   };
 
+  // ─── Quick action rows ──────────────────────────────────────────────────────
+
   const quickActions = [
     {
       label: "Memo\nMasuk",
@@ -384,6 +390,8 @@ export default function BerandaScreen() {
     },
   ];
 
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={["top"]}>
       <StatusBar
@@ -404,6 +412,7 @@ export default function BerandaScreen() {
           />
         }
       >
+        {/* Orbs */}
         <View
           style={[s.orb1, { backgroundColor: C.orb1 }]}
           pointerEvents="none"
@@ -413,9 +422,10 @@ export default function BerandaScreen() {
           pointerEvents="none"
         />
 
-        {/* ── HEADER ── */}
+        {/* ── HEADER ───────────────────────────────────────────────────────── */}
         <View style={s.header}>
           <View style={s.headerTop}>
+            {/* Avatar */}
             <View style={s.avatarWrap}>
               <View style={[s.avatarRing, { borderColor: C.accentBorder }]} />
               {profileImage ? (
@@ -437,6 +447,7 @@ export default function BerandaScreen() {
               />
             </View>
 
+            {/* Greeting */}
             <View style={s.greetBlock}>
               <Text style={[s.greetTop, { color: C.textMuted }]}>
                 SELAMAT DATANG
@@ -449,15 +460,16 @@ export default function BerandaScreen() {
               </Text>
             </View>
 
+            {/* Buttons */}
             <View style={s.hbtns}>
-              {/* ✅ Gunakan toggleDark dari context */}
+              {/* Theme toggle */}
               <TouchableOpacity
                 style={[
                   s.hbtn,
                   { backgroundColor: C.surface, borderColor: C.borderStrong },
                   C.shadowSm,
                 ]}
-                onPress={toggleDark}
+                onPress={() => setIsDark((v) => !v)}
                 activeOpacity={0.7}
               >
                 <FontAwesome6
@@ -467,6 +479,7 @@ export default function BerandaScreen() {
                 />
               </TouchableOpacity>
 
+              {/* Bell */}
               <TouchableOpacity
                 style={[
                   s.hbtn,
@@ -485,6 +498,7 @@ export default function BerandaScreen() {
                 />
               </TouchableOpacity>
 
+              {/* Settings */}
               <TouchableOpacity
                 style={[
                   s.hbtn,
@@ -503,6 +517,7 @@ export default function BerandaScreen() {
             </View>
           </View>
 
+          {/* System banner */}
           <View
             style={[
               s.sysBanner,
@@ -517,8 +532,9 @@ export default function BerandaScreen() {
           </View>
         </View>
 
-        {/* ── CONTENT ── */}
+        {/* ── CONTENT ──────────────────────────────────────────────────────── */}
         <View style={s.content}>
+          {/* Doc cards */}
           <SectionDivider label="RINGKASAN DOKUMEN" C={C} />
           <View style={s.docGrid}>
             {[
@@ -531,7 +547,7 @@ export default function BerandaScreen() {
                 bd: IC.blueBd,
                 cardBg: C.card1Bg,
                 glowBg: IC.blueBg,
-                route: "/memo/memo",
+                route: "",
               },
               {
                 label: "Undangan",
@@ -542,7 +558,7 @@ export default function BerandaScreen() {
                 bd: IC.purpleBd,
                 cardBg: C.card2Bg,
                 glowBg: IC.purpleBg,
-                route: "/undangan/undangan",
+                route: "",
               },
               {
                 label: "Risalah",
@@ -553,7 +569,7 @@ export default function BerandaScreen() {
                 bd: IC.greenBd,
                 cardBg: C.card3Bg,
                 glowBg: IC.greenBg,
-                route: "/risalah/risalah",
+                route: "",
               },
               {
                 label: "Disposisi",
@@ -564,7 +580,7 @@ export default function BerandaScreen() {
                 bd: IC.amberBd,
                 cardBg: C.card4Bg,
                 glowBg: IC.amberBg,
-                route: "/disposisi/disposisi",
+                route: "",
               },
             ].map((item) => (
               <TouchableOpacity
@@ -598,6 +614,7 @@ export default function BerandaScreen() {
             ))}
           </View>
 
+          {/* Quick actions */}
           <SectionDivider label="AKSES CEPAT" C={C} />
           <View style={s.quickGrid}>
             {quickActions.map((item) => (
@@ -626,6 +643,7 @@ export default function BerandaScreen() {
             ))}
           </View>
 
+          {/* Meetings */}
           <SectionDivider label="RAPAT MENDATANG" C={C} />
           <View
             style={[
@@ -772,6 +790,7 @@ export default function BerandaScreen() {
             )}
           </View>
 
+          {/* Approval (role 3) */}
           {role === "3" && (
             <>
               <SectionDivider label="MENUNGGU APPROVAL" C={C} />
@@ -907,6 +926,7 @@ export default function BerandaScreen() {
         </View>
       </ScrollView>
 
+      {/* ── EXIT MODAL ───────────────────────────────────────────────────────── */}
       {showExitModal && (
         <View style={s.modalOverlay}>
           <View
@@ -1015,6 +1035,7 @@ function EmptyState({
 const s = StyleSheet.create({
   safe: { flex: 1 },
   scrollContent: { paddingBottom: 120 },
+
   orb1: {
     position: "absolute",
     width: 280,
@@ -1031,8 +1052,11 @@ const s = StyleSheet.create({
     top: 200,
     left: -70,
   },
+
+  // Header
   header: { paddingHorizontal: 18, paddingTop: 16, paddingBottom: 16 },
   headerTop: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
+
   avatarWrap: { width: 48, height: 48, position: "relative", marginRight: 12 },
   avatarRing: {
     position: "absolute",
@@ -1066,6 +1090,7 @@ const s = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 2,
   },
+
   greetBlock: { flex: 1, minWidth: 0 },
   greetTop: {
     fontSize: 9,
@@ -1074,6 +1099,7 @@ const s = StyleSheet.create({
     marginBottom: 3,
   },
   greetName: { fontSize: 18, fontWeight: "800", letterSpacing: -0.5 },
+
   hbtns: { flexDirection: "row", gap: 8 },
   hbtn: {
     width: 38,
@@ -1093,6 +1119,7 @@ const s = StyleSheet.create({
     borderRadius: 3,
     borderWidth: 1.5,
   },
+
   sysBanner: {
     flexDirection: "row",
     alignItems: "center",
@@ -1105,7 +1132,10 @@ const s = StyleSheet.create({
   sysDot: { width: 7, height: 7, borderRadius: 4 },
   sysText: { flex: 1, fontSize: 11, fontWeight: "600", letterSpacing: 0.2 },
   sysOnline: { fontSize: 10, fontWeight: "600" },
+
   content: { paddingHorizontal: 14 },
+
+  // Doc grid
   docGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   docCard: {
     width: "47.5%",
@@ -1139,6 +1169,8 @@ const s = StyleSheet.create({
     marginBottom: 3,
   },
   docSub: { fontSize: 9.5, fontWeight: "500", letterSpacing: 0.2 },
+
+  // Quick grid
   quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   qaItem: { width: "22%", alignItems: "center", gap: 7 },
   qaIconWrap: {
@@ -1156,6 +1188,8 @@ const s = StyleSheet.create({
     lineHeight: 12,
     letterSpacing: 0.3,
   },
+
+  // Panel
   panel: {
     borderWidth: 0.5,
     borderRadius: 18,
@@ -1198,6 +1232,8 @@ const s = StyleSheet.create({
     paddingVertical: 5,
   },
   panelBtnText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.2 },
+
+  // Meeting
   miItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1236,6 +1272,8 @@ const s = StyleSheet.create({
     borderWidth: 0.5,
   },
   miBadgeText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.2 },
+
+  // Approval
   apvItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1267,6 +1305,8 @@ const s = StyleSheet.create({
   },
   apvPillText: { fontSize: 9, fontWeight: "700", letterSpacing: 0.5 },
   apvDate: { fontSize: 10, fontWeight: "500" },
+
+  // Modal
   modalOverlay: {
     position: "absolute",
     top: 0,

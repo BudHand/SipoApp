@@ -1,13 +1,11 @@
 // app/risalah/detail.tsx
 import CustomAlert from "@/components/CustomAlert";
-import { Colors } from "@/constants/colors";
-import { Fonts } from "@/constants/fonts";
+import { useTheme } from "@/context/ThemeContext";
 import { apiFetch, viewPDF } from "@/utils/api";
 import { formatTanggalID } from "@/utils/date";
-import { FontAwesome5 } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { FontAwesome6 } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,9 +13,11 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import {
@@ -27,616 +27,1192 @@ import {
 
 type Status = "pending" | "correction" | "approve" | "reject";
 
-const STATUS_STYLE: Record<
-  Status,
-  { label: string; color: string; bg: string }
-> = {
-  approve: { label: "Diterima", color: "#065F46", bg: "#D1FAE5" },
-  reject: { label: "Ditolak", color: "#991B1B", bg: "#FEE2E2" },
-  correction: { label: "Dikoreksi", color: "#92400E", bg: "#FEF3C7" },
-  pending: { label: "Diproses", color: Colors.primary, bg: "#E6F0FF" },
+const LIGHT = {
+  bg: "#F6F8FF",
+  surface: "#FFFFFF",
+  surface2: "#F8FAFC",
+  accent: "#2563EB",
+  accentBg: "#EEF4FF",
+  accentBorder: "rgba(37,99,235,0.20)",
+  border: "rgba(15,30,80,0.08)",
+  borderStrong: "rgba(15,30,80,0.12)",
+  textPrimary: "#0F1E50",
+  textSecondary: "#475569",
+  textTertiary: "#94A3B8",
+  textMuted: "#64748B",
+  green: "#15803D",
+  greenBg: "#DCFCE7",
+  greenBd: "rgba(21,128,61,0.20)",
+  danger: "#DC2626",
+  dangerBg: "#FEE2E2",
+  dangerBd: "rgba(220,38,38,0.20)",
+  amber: "#D97706",
+  amberBg: "#FEF3C7",
+  amberBd: "rgba(217,119,6,0.22)",
+  panelTopLine: "rgba(37,99,235,0.28)",
+  pdfBg: "#FFF1F2",
+  handle: "#CBD5E1",
+  backdrop: "rgba(15,30,80,0.45)",
+  shadowColor: "#0F1E50",
 };
 
-const TABBAR_HEIGHT_GUESS = Platform.select({
+const DARK = {
+  bg: "#060B18",
+  surface: "#0C1220",
+  surface2: "#0F1828",
+  accent: "#00D4FF",
+  accentBg: "rgba(0,212,255,0.08)",
+  accentBorder: "rgba(0,212,255,0.18)",
+  border: "rgba(255,255,255,0.07)",
+  borderStrong: "rgba(255,255,255,0.12)",
+  textPrimary: "rgba(255,255,255,0.90)",
+  textSecondary: "rgba(255,255,255,0.62)",
+  textTertiary: "rgba(255,255,255,0.38)",
+  textMuted: "rgba(255,255,255,0.46)",
+  green: "#00CC80",
+  greenBg: "rgba(0,200,120,0.13)",
+  greenBd: "rgba(0,200,120,0.25)",
+  danger: "#FF6B7A",
+  dangerBg: "rgba(255,77,109,0.10)",
+  dangerBd: "rgba(255,77,109,0.25)",
+  amber: "#FFAA00",
+  amberBg: "rgba(255,170,0,0.10)",
+  amberBd: "rgba(255,170,0,0.25)",
+  panelTopLine: "rgba(0,212,255,0.28)",
+  pdfBg: "rgba(255,77,109,0.10)",
+  handle: "rgba(255,255,255,0.22)",
+  backdrop: "rgba(0,0,0,0.62)",
+  shadowColor: "#000000",
+};
+
+type ThemeColors = typeof LIGHT;
+
+const TABBAR_HEIGHT = Platform.select({
   ios: 49,
   android: 56,
   default: 56,
 })!;
 
-const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-  <Text
-    style={[
-      Fonts.paragraphMediumSmall,
-      { color: Colors.textPrimary, marginBottom: 6 },
-    ]}
-  >
-    {children}
-  </Text>
-);
+const TUJUAN_COLLAPSE_THRESHOLD = 6;
+
+function getStatusConfig(
+  C: ThemeColors,
+): Record<
+  Status,
+  { label: string; icon: string; color: string; bg: string; border: string }
+> {
+  return {
+    approve: {
+      label: "Diterima",
+      icon: "circle-check",
+      color: C.green,
+      bg: C.greenBg,
+      border: C.greenBd,
+    },
+    reject: {
+      label: "Ditolak",
+      icon: "circle-xmark",
+      color: C.danger,
+      bg: C.dangerBg,
+      border: C.dangerBd,
+    },
+    correction: {
+      label: "Dikoreksi",
+      icon: "pen-to-square",
+      color: C.amber,
+      bg: C.amberBg,
+      border: C.amberBd,
+    },
+    pending: {
+      label: "Diproses",
+      icon: "clock",
+      color: C.accent,
+      bg: C.accentBg,
+      border: C.accentBorder,
+    },
+  };
+}
 
 function normalizeStatus(raw: any): Status {
   const s = String(raw ?? "")
     .toLowerCase()
     .trim();
-  if (["pending", "diproses", "process", "0"].includes(s)) return "pending";
+
   if (["approve", "approved", "diterima", "1"].includes(s)) return "approve";
   if (["reject", "rejected", "ditolak", "2"].includes(s)) return "reject";
   if (["correction", "dikoreksi", "3"].includes(s)) return "correction";
+
   return "pending";
+}
+
+function getValue(...values: any[]) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value;
+    }
+  }
+
+  return "-";
+}
+
+function formatDate(value: any) {
+  if (!value) return "-";
+
+  try {
+    return formatTanggalID(value);
+  } catch {
+    return String(value);
+  }
 }
 
 export default function RisalahDetail() {
   const router = useRouter();
-  const { id, notif_id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
+  const { id, notif_id } = useLocalSearchParams();
+  const { isDark } = useTheme();
+
+  const C: ThemeColors = isDark ? DARK : LIGHT;
+  const s = useMemo(() => createStyles(C, isDark), [C, isDark]);
+  const STATUS_CONFIG = useMemo(() => getStatusConfig(C), [C]);
+
+  const risalahId = Array.isArray(id) ? id[0] : id;
 
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any>(null);
+  const [owner, setOwner] = useState(false);
+  const [loadingPDF, setLoadingPDF] = useState(false);
+
   const [showApprove, setShowApprove] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
   const [catatan, setCatatan] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [showOptions, setShowOptions] = useState(false);
-  const [role, setRole] = useState<string | null>(null);
   const [showAlert, setShowAlert] = useState(false);
-  const [owner, setOwner] = useState(false);
+  const [showAllTujuan, setShowAllTujuan] = useState(false);
+
+  const statusNow = normalizeStatus(detail?.status);
+  const statusCfg = STATUS_CONFIG[statusNow];
+
+  const documentId = useMemo(() => {
+    return detail?.id_risalah ?? detail?.id ?? risalahId;
+  }, [detail, risalahId]);
+
+  const title = getValue(
+    detail?.judul,
+    detail?.title,
+    detail?.agenda,
+    "Detail Risalah",
+  );
+  const nomorRisalah = getValue(
+    detail?.nomor_risalah,
+    detail?.no_risalah,
+    detail?.nomor,
+    detail?.kode_risalah,
+  );
+  const tanggalRapat = getValue(
+    detail?.tgl_rapat,
+    detail?.tanggal,
+    detail?.date,
+  );
+  const pembuat = getValue(detail?.nama_pembuat, detail?.pembuat, detail?.kode);
+  const tempat = getValue(detail?.tempat, detail?.lokasi, detail?.ruangan);
+  const waktuMulai = getValue(detail?.waktu_mulai, detail?.jam_mulai);
+  const waktuSelesai = getValue(detail?.waktu_selesai, detail?.jam_selesai);
+
+  const tujuanList = useMemo(() => {
+    if (Array.isArray(detail?.tujuan_string)) return detail.tujuan_string;
+    if (Array.isArray(detail?.tujuan)) return detail.tujuan;
+    if (typeof detail?.tujuan_string === "string")
+      return [detail.tujuan_string];
+    if (typeof detail?.tujuan === "string") return [detail.tujuan];
+    return [];
+  }, [detail]);
+
+  const isNoteRequired =
+    selectedStatus === "reject" || selectedStatus === "correction";
+  const isSaveDisabled = !selectedStatus || (isNoteRequired && !catatan.trim());
+  const canApprove = statusNow === "pending" && owner;
+  const bottomOffset = insets.bottom + TABBAR_HEIGHT + 8;
 
   useEffect(() => {
-    AsyncStorage.getItem("role").then((r) => setRole(r));
-  }, []);
-
-  useEffect(() => {
-    async function fetchDetail() {
-      setLoading(true);
-      try {
-        try {
-          if (notif_id) {
-            await apiFetch(`/notifikasi/${notif_id}/read`, { method: "POST" });
-          }
-        } catch (e) {
-          console.log(e);
-        }
-        const raw = await apiFetch(`/risalahs/${id}`);
-        const data = raw?.data ?? raw;
-        const owner = raw.owner;
-        // console.log(data);
-        // console.log(owner);
-
-        setDetail(data);
-        setOwner(owner);
-      } catch (error) {
-        // console.log("Error:", error);
-        Alert.alert("Gagal", "Tidak dapat memuat detail risalah." + error);
-      } finally {
-        setLoading(false);
-      }
-    }
+    if (!risalahId) return;
     fetchDetail();
-  }, [id]);
+  }, [risalahId, notif_id]);
 
-  const [loadingPDF, setLoadingPDF] = useState(false);
+  async function fetchDetail() {
+    try {
+      setLoading(true);
 
-  const loadPDF = async () => {
+      try {
+        if (notif_id) {
+          await apiFetch(`/notifikasi/${notif_id}/read`, { method: "POST" });
+        }
+      } catch (error) {
+        console.log("Gagal read notifikasi:", error);
+      }
+
+      const raw = await apiFetch(`/risalahs/${risalahId}`);
+      const data = raw?.data ?? raw;
+
+      setDetail(data);
+      setOwner(Boolean(raw?.owner));
+    } catch (error: any) {
+      Alert.alert(
+        "Gagal",
+        error?.message || "Tidak dapat memuat detail risalah.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadPDF() {
+    if (!documentId) {
+      Alert.alert("Error", "ID risalah tidak ditemukan.");
+      return;
+    }
+
     try {
       setLoadingPDF(true);
-      await viewPDF("risalahs", detail.id_risalah);
+      await viewPDF("risalahs", documentId);
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Gagal membuka PDF risalah.");
     } finally {
       setLoadingPDF(false);
     }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary ?? "#0B3B82"} />
-        <Text style={[Fonts.paragraphRegularSmall, styles.loadingText]}>
-          Sedang memuat risalah...
-        </Text>
-      </View>
-    );
   }
-
-  if (!detail) {
-    return (
-      <View style={styles.center}>
-        <Text style={[Fonts.paragraphMediumSmall]}>
-          Data risalah tidak ditemukan.
-        </Text>
-      </View>
-    );
-  }
-
-  const statusNow: Status = normalizeStatus(detail.status);
-  const isNoteRequired =
-    selectedStatus === "reject" || selectedStatus === "correction";
-  const isSaveDisabled =
-    !selectedStatus ||
-    ((selectedStatus === "reject" || selectedStatus === "correction") &&
-      !catatan.trim());
 
   async function submitApproval() {
     if (isSaveDisabled) return;
+
     try {
       setSubmitting(true);
-      await apiFetch(`/risalahs/${id}/update-status?_method=PUT`, {
+
+      await apiFetch(`/risalahs/${risalahId}/update-status?_method=PUT`, {
         method: "POST",
         body: JSON.stringify({
           status: selectedStatus,
           catatan: isNoteRequired ? catatan.trim() : null,
         }),
       });
+
       setDetail((prev: any) => ({ ...prev, status: selectedStatus }));
       setShowApprove(false);
       setSelectedStatus(null);
       setCatatan("");
       setShowAlert(true);
-    } catch (e: any) {
-      console.log(e);
-      Alert.alert("Gagal", e?.message ?? "Gagal mengirim persetujuan.");
+    } catch (error: any) {
+      Alert.alert("Gagal", error?.message || "Gagal mengirim persetujuan.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  const bottomOffset = insets.bottom + TABBAR_HEIGHT_GUESS + 8;
+  if (loading) {
+    return (
+      <SafeAreaView style={s.loadingRoot}>
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor={C.bg}
+        />
+        <ActivityIndicator color={C.accent} size="large" />
+        <Text style={s.loadingText}>Memuat detail risalah...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <SafeAreaView style={s.loadingRoot}>
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor={C.bg}
+        />
+        <Text style={s.emptyTitle}>Risalah tidak ditemukan</Text>
+        <TouchableOpacity style={s.backHomeBtn} onPress={() => router.back()}>
+          <Text style={s.backHomeText}>Kembali</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: Colors.pageBg }}>
-      {/* HEADER */}
-      <View
-        style={{
-          paddingHorizontal: 16,
-          paddingTop: 8,
-          paddingBottom: 10,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: 10,
-          backgroundColor: Colors.white,
-          marginTop: Platform.OS === "android" ? insets.top : 10,
-        }}
-      >
-        <Pressable
-          onPress={() => router.back()}
-          hitSlop={10}
-          style={{ padding: 6 }}
-        >
-          <FontAwesome5
-            name="chevron-left"
-            size={18}
-            color={Colors.textPrimary}
-          />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text
-            style={[Fonts.header6, { color: Colors.textPrimary, marginTop: 2 }]}
-            numberOfLines={2}
-          >
-            {detail.judul}
-          </Text>
-          <Text style={[Fonts.paragraphMediumSmall, { color: Colors.primary }]}>
-            {STATUS_STYLE[statusNow]?.label ?? "Status"}
-          </Text>
+    <SafeAreaView style={s.root} edges={["top"]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={C.bg}
+      />
+
+      <CustomAlert
+        visible={showAlert}
+        onClose={() => setShowAlert(false)}
+        title="Berhasil"
+        message="Persetujuan berhasil dikirim."
+      />
+
+      <View style={[s.header, { paddingTop: Math.max(insets.top, 10) }]}>
+        <TouchableOpacity style={s.headerButton} onPress={() => router.back()}>
+          <FontAwesome6 name="chevron-left" size={14} color={C.textPrimary} />
+        </TouchableOpacity>
+
+        <View style={s.headerTextWrap}>
+          <Text style={s.headerTitle}>Detail Risalah</Text>
+          <Text style={s.headerSub}>Informasi risalah rapat</Text>
+        </View>
+
+        <View style={s.headerIcon}>
+          <FontAwesome6 name="clipboard-list" size={15} color={C.accent} />
         </View>
       </View>
 
-      {/* KONTEN */}
-      <View style={{ flex: 1 }}>
-        <ScrollView
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            paddingBottom: 24 + bottomOffset + 64,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Pop up berhasil */}
-          <CustomAlert
-            visible={showAlert}
-            onClose={() => setShowAlert(false)}
-            title="Berhasil"
-            message="Persetujuan berhasil dikirim."
-          />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          s.scrollContent,
+          { paddingBottom: 36 + bottomOffset + (canApprove ? 62 : 0) },
+        ]}
+      >
+        <View style={s.heroCard}>
+          <View style={s.cardTopLine} />
 
-          <View style={styles.card}>
-            <View style={styles.cardStrip} />
-            <View style={{ padding: 14 }}>
-              <Text
-                style={[
-                  Fonts.paragraphRegularSmall,
-                  { color: Colors.textPrimary, opacity: 0.8, marginBottom: 6 },
-                ]}
-              >
-                {detail.nomor_risalah}
-              </Text>
+          <View style={s.heroTop}>
+            <View style={s.heroIcon}>
+              <FontAwesome6 name="clipboard-list" size={21} color={C.accent} />
+            </View>
 
-              <Text
-                style={[
-                  Fonts.header6,
-                  { color: Colors.textPrimary, marginBottom: 4 },
-                ]}
-              >
-                {detail.judul}
+            <View
+              style={[
+                s.statusBadge,
+                {
+                  backgroundColor: statusCfg.bg,
+                  borderColor: statusCfg.border,
+                },
+              ]}
+            >
+              <FontAwesome6
+                name={statusCfg.icon as any}
+                size={11}
+                color={statusCfg.color}
+              />
+              <Text style={[s.statusText, { color: statusCfg.color }]}>
+                {statusCfg.label}
               </Text>
-
-              <Text
-                style={[
-                  Fonts.paragraphRegularSmall,
-                  { color: Colors.textPrimary },
-                ]}
-              >
-                Dibuat oleh{" "}
-                <Text style={[Fonts.paragraphMediumSmall]}>
-                  {detail.nama_pembuat ?? detail.kode}
-                </Text>
-              </Text>
-              <Text
-                style={[
-                  Fonts.paragraphRegularSmall,
-                  { color: Colors.textPrimary },
-                ]}
-              >
-                pada {detail.tgl_rapat}
-                <Text style={[Fonts.paragraphMediumSmall]}>
-                  {formatTanggalID(detail.tgl_rapat)}
-                </Text>{" "}
-              </Text>
-              <Text
-                style={[
-                  Fonts.paragraphMediumSmall,
-                  { color: Colors.textPrimary, marginBottom: 12 },
-                ]}
-              >
-                Status :{STATUS_STYLE[statusNow]?.label ?? "Status"}
-              </Text>
-              {Array.isArray(detail.tujuan_string) &&
-                detail.tujuan_string.length > 0 && (
-                  <>
-                    <SectionTitle>Ditujukan untuk :</SectionTitle>
-                    <View style={{ gap: 6, marginBottom: 12 }}>
-                      {detail.tujuan_string.map((t: string, idx: number) => (
-                        <View
-                          key={idx}
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "flex-start",
-                            gap: 8,
-                          }}
-                        >
-                          <Text
-                            style={[
-                              Fonts.paragraphRegularSmall,
-                              { color: Colors.textPrimary, marginTop: 1 },
-                            ]}
-                          >
-                            {idx + 1}.
-                          </Text>
-                          <Text
-                            style={[
-                              Fonts.paragraphRegularSmall,
-                              { color: Colors.textPrimary, flex: 1 },
-                            ]}
-                          >
-                            {t}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-                  </>
-                )}
-              <SectionTitle>Detail Risalah :</SectionTitle>
-              <Pressable onPress={loadPDF} style={styles.pdfButton}>
-                {loadingPDF ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
-                ) : (
-                  <>
-                    <FontAwesome5
-                      name="file-pdf"
-                      size={14}
-                      color={Colors.white}
-                    />
-                    <Text
-                      style={[
-                        Fonts.paragraphMediumSmall,
-                        { color: Colors.white },
-                      ]}
-                    >
-                      View PDF
-                    </Text>
-                  </>
-                )}
-              </Pressable>
-
-              {/* Catatan dari server */}
-              {(detail.status === "correction" || detail.status === "reject") &&
-                detail.catatan && (
-                  <>
-                    <SectionTitle>Catatan :</SectionTitle>
-                    <Text
-                      style={[
-                        Fonts.paragraphMediumSmall,
-                        {
-                          color: Colors.textPrimary,
-                          backgroundColor: "#F9FAFB",
-                          borderRadius: 8,
-                          padding: 10,
-                        },
-                      ]}
-                    >
-                      {detail.catatan}
-                    </Text>
-                  </>
-                )}
             </View>
           </View>
-        </ScrollView>
 
-        {/* Tombol Persetujuan */}
-        {statusNow === "pending" && owner && (
-          <View
-            style={[styles.bottomButtonContainer, { bottom: bottomOffset }]}
-          >
-            <Pressable
-              onPress={() => setShowApprove(true)}
-              style={styles.approveBtn}
+          <Text style={s.heroTitle}>{title}</Text>
+
+          <View style={s.numberPill}>
+            <FontAwesome6 name="hashtag" size={11} color={C.textMuted} />
+            <Text style={s.numberText}>{nomorRisalah}</Text>
+          </View>
+
+          <View style={s.topActions}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={loadPDF}
+              disabled={loadingPDF}
+              style={[s.actionButton, s.pdfButton, loadingPDF && s.disabled]}
             >
-              <Text
-                style={[Fonts.paragraphMediumSmall, { color: Colors.white }]}
-              >
-                Persetujuan
-              </Text>
-            </Pressable>
+              {loadingPDF ? (
+                <ActivityIndicator size="small" color={C.danger} />
+              ) : (
+                <>
+                  <FontAwesome6 name="file-pdf" size={14} color={C.danger} />
+                  <Text style={s.pdfButtonText}>Lihat PDF</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={s.sectionCard}>
+          <SectionHeader
+            s={s}
+            C={C}
+            icon="circle-info"
+            title="Informasi Risalah"
+          />
+
+          <InfoRow
+            s={s}
+            C={C}
+            icon="user"
+            label="Pembuat"
+            value={String(pembuat)}
+          />
+          <InfoRow
+            s={s}
+            C={C}
+            icon="calendar-days"
+            label="Tanggal Rapat"
+            value={formatDate(tanggalRapat)}
+          />
+          <InfoRow
+            s={s}
+            C={C}
+            icon="clock"
+            label="Waktu"
+            value={`${waktuMulai} - ${waktuSelesai}`}
+          />
+          <InfoRow
+            s={s}
+            C={C}
+            icon="location-dot"
+            label="Tempat"
+            value={String(tempat)}
+          />
+        </View>
+
+        {tujuanList.length > 0 && (
+          <View style={s.sectionCard}>
+            <SectionHeader s={s} C={C} icon="users" title="Ditujukan Untuk" />
+
+            <View style={s.tujuanBox}>
+              <View style={s.tujuanHeader}>
+                <FontAwesome6 name="paper-plane" size={12} color={C.accent} />
+                <Text style={s.tujuanTitle}>Penerima Risalah</Text>
+                <Text style={s.tujuanCount}>{tujuanList.length} orang</Text>
+              </View>
+
+              {(showAllTujuan
+                ? tujuanList
+                : tujuanList.slice(0, TUJUAN_COLLAPSE_THRESHOLD)
+              ).map((item: any, index: number) => (
+                <View key={`${String(item)}-${index}`} style={s.tujuanItem}>
+                  <View style={s.tujuanBullet} />
+                  <Text style={s.tujuanText}>{String(item)}</Text>
+                </View>
+              ))}
+
+              {tujuanList.length > TUJUAN_COLLAPSE_THRESHOLD && (
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={() => setShowAllTujuan((prev) => !prev)}
+                  style={s.tujuanToggleBtn}
+                >
+                  <FontAwesome6
+                    name={showAllTujuan ? "chevron-up" : "chevron-down"}
+                    size={10}
+                    color={C.accent}
+                  />
+                  <Text style={s.tujuanToggleText}>
+                    {showAllTujuan
+                      ? "Sembunyikan"
+                      : `Lihat semua ${tujuanList.length} penerima`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
         )}
-      </View>
 
-      {/* MODAL APPROVAL */}
+        {(statusNow === "correction" || statusNow === "reject") &&
+          !!detail?.catatan && (
+            <View style={s.noteCard}>
+              <View style={s.noteHeader}>
+                <View style={s.noteIcon}>
+                  <FontAwesome6
+                    name={
+                      statusNow === "reject" ? "circle-xmark" : "pen-to-square"
+                    }
+                    size={13}
+                    color={statusCfg.color}
+                  />
+                </View>
+                <Text style={s.noteTitle}>Catatan Persetujuan</Text>
+              </View>
+
+              <Text style={s.noteText}>{detail.catatan}</Text>
+            </View>
+          )}
+      </ScrollView>
+
+      {canApprove && (
+        <View style={[s.bottomBar, { bottom: bottomOffset }]}>
+          <TouchableOpacity
+            activeOpacity={0.88}
+            style={s.approveFloatingBtn}
+            onPress={() => setShowApprove(true)}
+          >
+            <FontAwesome6 name="shield-halved" size={15} color="#FFFFFF" />
+            <Text style={s.approveFloatingText}>Persetujuan Risalah</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <Modal
         visible={showApprove}
         transparent
         animationType="fade"
+        statusBarTranslucent
         onRequestClose={() => setShowApprove(false)}
       >
         <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => {
-            setShowApprove(false);
-            setShowOptions(false);
-          }}
-        />
-        <View style={styles.modalCard}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              marginBottom: 8,
-            }}
+          style={s.modalBackdrop}
+          onPress={() => setShowApprove(false)}
+        >
+          <Pressable
+            style={s.approvalSheet}
+            onPress={(e) => e.stopPropagation()}
           >
-            <Text style={[Fonts.header4, { color: Colors.textPrimary }]}>
-              PERSETUJUAN RISALAH
-            </Text>
-            <Pressable
-              onPress={() => {
-                setShowApprove(false);
-                setShowOptions(false);
-              }}
-              hitSlop={10}
-              style={{ padding: 6 }}
-            >
-              <FontAwesome5 name="times" size={18} color={Colors.textPrimary} />
-            </Pressable>
-          </View>
+            <View style={s.modalHandle} />
 
-          <Text
-            style={[
-              Fonts.paragraphMediumSmall,
-              { color: Colors.textPrimary, marginBottom: 6 },
-            ]}
-          >
-            Status
-          </Text>
+            <View style={s.approvalHeader}>
+              <View style={s.approvalIcon}>
+                <FontAwesome6 name="shield-halved" size={14} color={C.accent} />
+              </View>
 
-          <View style={{ marginBottom: 12 }}>
-            <Pressable
-              onPress={() => setShowOptions((v) => !v)}
-              style={styles.selectBox}
-            >
-              <Text
-                style={[
-                  Fonts.paragraphMediumLarge,
-                  { color: Colors.textPrimary },
-                ]}
+              <View style={{ flex: 1 }}>
+                <Text style={s.approvalTitle}>Persetujuan Risalah</Text>
+                <Text style={s.approvalSub}>
+                  Pilih keputusan persetujuan risalah.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={s.approvalClose}
+                onPress={() => setShowApprove(false)}
               >
-                {selectedStatus
-                  ? STATUS_STYLE[selectedStatus].label
-                  : "Pilih Status"}
-              </Text>
-              <FontAwesome5
-                name={showOptions ? "chevron-up" : "chevron-down"}
-                size={14}
-                color={Colors.textPrimary}
-              />
-            </Pressable>
+                <FontAwesome6 name="xmark" size={14} color={C.textSecondary} />
+              </TouchableOpacity>
+            </View>
 
-            {showOptions && (
-              <View style={styles.dropdown}>
-                {(["approve", "reject", "correction"] as Status[]).map(
-                  (value) => (
-                    <Pressable
+            <Text style={s.modalLabel}>Status Keputusan</Text>
+
+            <View style={s.statusGrid}>
+              {(["approve", "reject", "correction"] as Status[]).map(
+                (value) => {
+                  const cfg = STATUS_CONFIG[value];
+                  const active = selectedStatus === value;
+
+                  return (
+                    <TouchableOpacity
                       key={value}
-                      onPress={() => {
-                        setSelectedStatus(value);
-                        setShowOptions(false);
-                      }}
-                      style={({ pressed }) => [
-                        styles.dropdownItem,
-                        pressed && { backgroundColor: "#F3F4F6" },
+                      activeOpacity={0.82}
+                      onPress={() => setSelectedStatus(value)}
+                      style={[
+                        s.statusOption,
+                        {
+                          backgroundColor: active ? cfg.bg : C.surface2,
+                          borderColor: active ? cfg.border : C.borderStrong,
+                        },
                       ]}
                     >
+                      <FontAwesome6
+                        name={cfg.icon as any}
+                        size={13}
+                        color={active ? cfg.color : C.textTertiary}
+                      />
                       <Text
                         style={[
-                          Fonts.paragraphMediumLarge,
-                          { color: Colors.textPrimary },
+                          s.statusOptionText,
+                          { color: active ? cfg.color : C.textSecondary },
                         ]}
                       >
-                        {STATUS_STYLE[value].label}
+                        {cfg.label}
                       </Text>
-                    </Pressable>
-                  )
-                )}
-              </View>
-            )}
-          </View>
-
-          {(selectedStatus === "reject" || selectedStatus === "correction") && (
-            <>
-              <Text
-                style={[
-                  Fonts.paragraphMediumSmall,
-                  { color: Colors.textPrimary, marginBottom: 6 },
-                ]}
-              >
-                Catatan
-              </Text>
-              <TextInput
-                placeholder="Catatan wajib diisi..."
-                value={catatan}
-                onChangeText={setCatatan}
-                editable
-                multiline
-                style={styles.noteInput}
-              />
-            </>
-          )}
-
-          {owner && (
-            <Pressable
-              disabled={isSaveDisabled || submitting}
-              onPress={submitApproval}
-              style={[
-                styles.submitBtn,
-                (isSaveDisabled || submitting) && { opacity: 0.6 },
-              ]}
-            >
-              {submitting ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text
-                  style={[
-                    Fonts.paragraphMediumSmall,
-                    { color: Colors.white, textAlign: "center" },
-                  ]}
-                >
-                  Simpan
-                </Text>
+                    </TouchableOpacity>
+                  );
+                },
               )}
-            </Pressable>
-          )}
-        </View>
+            </View>
+
+            {isNoteRequired && (
+              <>
+                <Text style={s.modalLabel}>Catatan *</Text>
+                <TextInput
+                  placeholder="Catatan wajib diisi untuk keputusan ini..."
+                  placeholderTextColor={C.textTertiary}
+                  value={catatan}
+                  onChangeText={setCatatan}
+                  multiline
+                  style={s.noteInput}
+                />
+              </>
+            )}
+
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={s.cancelBtn}
+                onPress={() => setShowApprove(false)}
+              >
+                <Text style={s.cancelText}>Batal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                style={[
+                  s.saveBtn,
+                  (isSaveDisabled || submitting) && s.disabled,
+                ]}
+                disabled={isSaveDisabled || submitting}
+                onPress={submitApproval}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={s.saveText}>Simpan</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
       </Modal>
-      {/* <BottomNav /> */}
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F7F8FA",
-  },
-  loadingText: {
-    marginTop: 8,
-    color: "#475569",
-  },
-  card: {
-    marginTop: 15,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E7ECEF",
-    overflow: "hidden",
-  },
-  cardStrip: { height: 8, backgroundColor: "#F3F6F9" },
-  pdfButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    gap: 8,
-    backgroundColor: Colors.pdf,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-  },
-  bottomButtonContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    padding: 16,
-    zIndex: 20,
-    elevation: 20,
-  },
-  approveBtn: {
-    backgroundColor: Colors.navy ?? Colors.primary,
-    borderRadius: 28,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.3)",
-  },
-  modalCard: {
-    position: "absolute",
-    left: 24,
-    right: 24,
-    top: "20%",
-    backgroundColor: Colors.white,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  selectBox: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: "#E7ECEF",
-  },
-  dropdown: {
-    marginTop: 6,
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E7ECEF",
-    overflow: "hidden",
-  },
-  dropdownItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-  },
-  noteInput: {
-    backgroundColor: "#F3F4F6",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 48,
-    marginBottom: 16,
-    textAlignVertical: "top",
-    borderWidth: 1,
-    borderColor: "#E7ECEF",
-  },
-  submitBtn: {
-    backgroundColor: Colors.navy ?? Colors.primary,
-    borderRadius: 28,
-    paddingVertical: 12,
-    alignItems: "center",
-  },
-});
+function SectionHeader({
+  icon,
+  title,
+  C,
+  s,
+}: {
+  icon: any;
+  title: string;
+  C: ThemeColors;
+  s: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={s.sectionHeader}>
+      <View style={s.sectionIcon}>
+        <FontAwesome6 name={icon} size={13} color={C.accent} />
+      </View>
+      <Text style={s.sectionTitle}>{title}</Text>
+    </View>
+  );
+}
+
+function InfoRow({
+  icon,
+  label,
+  value,
+  C,
+  s,
+}: {
+  icon: any;
+  label: string;
+  value: string;
+  C: ThemeColors;
+  s: ReturnType<typeof createStyles>;
+}) {
+  return (
+    <View style={s.infoRow}>
+      <View style={s.infoIcon}>
+        <FontAwesome6 name={icon} size={12} color={C.textMuted} />
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <Text style={s.infoLabel}>{label}</Text>
+        <Text style={s.infoValue}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function createStyles(C: ThemeColors, isDark: boolean) {
+  return StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: C.bg,
+    },
+    loadingRoot: {
+      flex: 1,
+      backgroundColor: C.bg,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 24,
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 13,
+      fontWeight: "700",
+      color: C.textMuted,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: C.textPrimary,
+      marginBottom: 14,
+    },
+    backHomeBtn: {
+      backgroundColor: C.accent,
+      paddingHorizontal: 18,
+      paddingVertical: 11,
+      borderRadius: 14,
+    },
+    backHomeText: {
+      color: "#FFFFFF",
+      fontSize: 13,
+      fontWeight: "800",
+    },
+    header: {
+      paddingHorizontal: 18,
+      paddingBottom: 14,
+      backgroundColor: C.surface,
+      borderBottomWidth: 1,
+      borderBottomColor: C.border,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    headerButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 14,
+      backgroundColor: C.surface2,
+      borderWidth: 1,
+      borderColor: C.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    headerTextWrap: {
+      flex: 1,
+    },
+    headerTitle: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: C.textPrimary,
+    },
+    headerSub: {
+      marginTop: 2,
+      fontSize: 11,
+      fontWeight: "700",
+      color: C.textMuted,
+    },
+    headerIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 14,
+      backgroundColor: C.accentBg,
+      borderWidth: 1,
+      borderColor: C.accentBorder,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    scrollContent: {
+      padding: 18,
+    },
+    heroCard: {
+      backgroundColor: C.surface,
+      borderRadius: 26,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: C.border,
+      shadowColor: C.shadowColor,
+      shadowOpacity: isDark ? 0 : 0.08,
+      shadowRadius: isDark ? 0 : 18,
+      shadowOffset: { width: 0, height: isDark ? 0 : 8 },
+      elevation: isDark ? 0 : 3,
+      marginBottom: 14,
+      overflow: "hidden",
+    },
+    cardTopLine: {
+      position: "absolute",
+      top: 0,
+      left: 44,
+      right: 44,
+      height: 1,
+      backgroundColor: C.panelTopLine,
+    },
+    heroTop: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    heroIcon: {
+      width: 46,
+      height: 46,
+      borderRadius: 16,
+      backgroundColor: C.accentBg,
+      borderWidth: 1,
+      borderColor: C.accentBorder,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    statusBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 11,
+      paddingVertical: 7,
+    },
+    statusText: {
+      fontSize: 11,
+      fontWeight: "900",
+    },
+    heroTitle: {
+      marginTop: 16,
+      fontSize: 19,
+      lineHeight: 26,
+      fontWeight: "900",
+      color: C.textPrimary,
+      letterSpacing: -0.4,
+    },
+    numberPill: {
+      marginTop: 12,
+      alignSelf: "flex-start",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      backgroundColor: C.surface2,
+      borderWidth: 1,
+      borderColor: C.border,
+      borderRadius: 999,
+      paddingHorizontal: 11,
+      paddingVertical: 7,
+    },
+    numberText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: C.textMuted,
+    },
+    topActions: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 16,
+    },
+    actionButton: {
+      flex: 1,
+      minHeight: 46,
+      borderRadius: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    pdfButton: {
+      backgroundColor: C.pdfBg,
+      borderWidth: 1,
+      borderColor: C.dangerBd,
+    },
+    pdfButtonText: {
+      fontSize: 13,
+      fontWeight: "900",
+      color: C.danger,
+    },
+    disabled: {
+      opacity: 0.55,
+    },
+    sectionCard: {
+      backgroundColor: C.surface,
+      borderRadius: 22,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: C.border,
+      marginBottom: 14,
+    },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      marginBottom: 14,
+    },
+    sectionIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: 11,
+      backgroundColor: C.accentBg,
+      borderWidth: 1,
+      borderColor: C.accentBorder,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    sectionTitle: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: C.textPrimary,
+    },
+    infoRow: {
+      flexDirection: "row",
+      gap: 10,
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: C.border,
+    },
+    infoIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: 10,
+      backgroundColor: C.surface2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    infoLabel: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: C.textTertiary,
+      letterSpacing: 0.8,
+      textTransform: "uppercase",
+    },
+    infoValue: {
+      marginTop: 3,
+      fontSize: 13,
+      lineHeight: 19,
+      fontWeight: "700",
+      color: C.textPrimary,
+    },
+    tujuanBox: {
+      backgroundColor: C.surface2,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: C.border,
+      padding: 12,
+    },
+    tujuanHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 9,
+    },
+    tujuanTitle: {
+      fontSize: 12,
+      fontWeight: "900",
+      color: C.textPrimary,
+      flex: 1,
+    },
+    tujuanCount: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: C.textMuted,
+      backgroundColor: C.surface,
+      borderWidth: 1,
+      borderColor: C.border,
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    tujuanItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      paddingVertical: 5,
+    },
+    tujuanBullet: {
+      width: 6,
+      height: 6,
+      borderRadius: 999,
+      backgroundColor: C.accent,
+      marginTop: 6,
+    },
+    tujuanText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 18,
+      fontWeight: "700",
+      color: C.textSecondary,
+    },
+    tujuanToggleBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      marginTop: 10,
+      paddingVertical: 8,
+      borderRadius: 12,
+      backgroundColor: C.accentBg,
+      borderWidth: 1,
+      borderColor: C.accentBorder,
+    },
+    tujuanToggleText: {
+      fontSize: 11,
+      fontWeight: "900",
+      color: C.accent,
+    },
+    noteCard: {
+      backgroundColor: C.surface,
+      borderRadius: 22,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: C.border,
+      marginBottom: 14,
+    },
+    noteHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 9,
+      marginBottom: 10,
+    },
+    noteIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: 11,
+      backgroundColor: C.surface2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    noteTitle: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: C.textPrimary,
+    },
+    noteText: {
+      fontSize: 13,
+      lineHeight: 20,
+      fontWeight: "600",
+      color: C.textSecondary,
+      backgroundColor: C.surface2,
+      borderRadius: 14,
+      padding: 12,
+    },
+    bottomBar: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      paddingHorizontal: 16,
+      zIndex: 20,
+    },
+    approveFloatingBtn: {
+      minHeight: 52,
+      borderRadius: 999,
+      backgroundColor: C.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      flexDirection: "row",
+      gap: 8,
+      shadowColor: C.accent,
+      shadowOpacity: isDark ? 0 : 0.22,
+      shadowRadius: isDark ? 0 : 14,
+      shadowOffset: { width: 0, height: isDark ? 0 : 8 },
+      elevation: isDark ? 0 : 5,
+    },
+    approveFloatingText: {
+      fontSize: 14,
+      fontWeight: "900",
+      color: "#FFFFFF",
+    },
+    modalBackdrop: {
+      flex: 1,
+      justifyContent: "flex-end",
+      backgroundColor: C.backdrop,
+    },
+    approvalSheet: {
+      backgroundColor: C.surface,
+      borderTopLeftRadius: 26,
+      borderTopRightRadius: 26,
+      padding: 20,
+      paddingBottom: 26,
+    },
+    modalHandle: {
+      alignSelf: "center",
+      width: 40,
+      height: 4,
+      borderRadius: 999,
+      backgroundColor: C.handle,
+      marginBottom: 16,
+    },
+    approvalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 16,
+    },
+    approvalIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 12,
+      backgroundColor: C.accentBg,
+      borderWidth: 1,
+      borderColor: C.accentBorder,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    approvalTitle: {
+      fontSize: 16,
+      fontWeight: "900",
+      color: C.textPrimary,
+    },
+    approvalSub: {
+      marginTop: 2,
+      fontSize: 12,
+      fontWeight: "600",
+      color: C.textMuted,
+    },
+    approvalClose: {
+      width: 32,
+      height: 32,
+      borderRadius: 11,
+      backgroundColor: C.surface2,
+      borderWidth: 1,
+      borderColor: C.border,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    modalLabel: {
+      fontSize: 10,
+      fontWeight: "900",
+      letterSpacing: 1.1,
+      color: C.textTertiary,
+      textTransform: "uppercase",
+      marginBottom: 9,
+    },
+    statusGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 14,
+    },
+    statusOption: {
+      flexGrow: 1,
+      minWidth: "31%",
+      minHeight: 44,
+      borderRadius: 15,
+      borderWidth: 1,
+      paddingHorizontal: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    },
+    statusOptionText: {
+      fontSize: 12,
+      fontWeight: "900",
+    },
+    noteInput: {
+      minHeight: 94,
+      borderRadius: 16,
+      backgroundColor: C.surface2,
+      borderWidth: 1,
+      borderColor: C.borderStrong,
+      padding: 13,
+      textAlignVertical: "top",
+      fontSize: 13,
+      fontWeight: "600",
+      color: C.textPrimary,
+    },
+    modalActions: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 14,
+    },
+    cancelBtn: {
+      flex: 1,
+      minHeight: 46,
+      borderRadius: 15,
+      borderWidth: 1,
+      borderColor: C.borderStrong,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    cancelText: {
+      fontSize: 13,
+      fontWeight: "900",
+      color: C.textMuted,
+    },
+    saveBtn: {
+      flex: 2,
+      minHeight: 46,
+      borderRadius: 15,
+      backgroundColor: C.accent,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    saveText: {
+      fontSize: 13,
+      fontWeight: "900",
+      color: "#FFFFFF",
+    },
+  });
+}

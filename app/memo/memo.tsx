@@ -21,32 +21,33 @@ const LIGHT = {
   surface3: "#EBF0F8",
   border: "rgba(100,140,200,0.13)",
   borderStrong: "rgba(80,120,190,0.2)",
-  accent: "#6B3FA8",
-  accentBg: "rgba(107,63,168,0.08)",
-  accentBorder: "rgba(107,63,168,0.2)",
+  accent: "#1A6FD4",
+  accent2: "#2A88F5",
+  accentBg: "rgba(26,111,212,0.07)",
+  accentBorder: "rgba(26,111,212,0.18)",
   textPrimary: "#0D1829",
   textSecondary: "#3A5070",
   textTertiary: "#7A99BE",
   textMuted: "#A8C0D8",
-  purple: "#6B3FA8",
-  purpleBg: "rgba(107,63,168,0.08)",
-  purpleBd: "rgba(107,63,168,0.2)",
-  purple2: "#8B5CC8",
-  purple2Bg: "rgba(139,92,200,0.08)",
-  purple2Bd: "rgba(139,92,200,0.2)",
-  cardIn: "#F4EEFF",
-  cardOut: "#F0EAFF",
-  orb1: "rgba(107,63,168,0.06)",
-  orb2: "rgba(139,92,200,0.04)",
+  blue: "#1A6FD4",
+  blueBg: "rgba(26,111,212,0.08)",
+  blueBd: "rgba(26,111,212,0.2)",
+  blue2: "#1558B0",
+  blue2Bg: "rgba(21,88,176,0.08)",
+  blue2Bd: "rgba(21,88,176,0.2)",
+  cardIn: "#EDF3FF",
+  cardOut: "#EEF2FF",
+  orb1: "rgba(26,111,212,0.06)",
+  orb2: "rgba(42,136,245,0.04)",
   shadowSm: {
-    shadowColor: "#3A1A8C",
+    shadowColor: "#1A3C8C",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.07,
     shadowRadius: 8,
     elevation: 2,
   },
   shadowMd: {
-    shadowColor: "#3A1A8C",
+    shadowColor: "#1A3C8C",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.1,
     shadowRadius: 16,
@@ -61,23 +62,24 @@ const DARK = {
   surface3: "#141E30",
   border: "rgba(255,255,255,0.055)",
   borderStrong: "rgba(255,255,255,0.1)",
-  accent: "#BB88FF",
-  accentBg: "rgba(120,80,255,0.13)",
-  accentBorder: "rgba(120,80,255,0.25)",
+  accent: "#00D4FF",
+  accent2: "#00AACC",
+  accentBg: "rgba(0,212,255,0.08)",
+  accentBorder: "rgba(0,212,255,0.18)",
   textPrimary: "rgba(255,255,255,0.90)",
   textSecondary: "rgba(255,255,255,0.50)",
   textTertiary: "rgba(255,255,255,0.28)",
   textMuted: "rgba(255,255,255,0.15)",
-  purple: "#BB88FF",
-  purpleBg: "rgba(120,80,255,0.13)",
-  purpleBd: "rgba(120,80,255,0.25)",
-  purple2: "#D0AAFF",
-  purple2Bg: "rgba(187,136,255,0.13)",
-  purple2Bd: "rgba(187,136,255,0.25)",
-  cardIn: "#120A28",
-  cardOut: "#160E32",
-  orb1: "rgba(120,80,255,0.10)",
-  orb2: "rgba(187,136,255,0.06)",
+  blue: "#4AB0FF",
+  blueBg: "rgba(0,132,255,0.13)",
+  blueBd: "rgba(0,132,255,0.25)",
+  blue2: "#7AC8FF",
+  blue2Bg: "rgba(74,176,255,0.13)",
+  blue2Bd: "rgba(74,176,255,0.25)",
+  cardIn: "#0A1628",
+  cardOut: "#101B38",
+  orb1: "rgba(0,132,255,0.10)",
+  orb2: "rgba(0,255,198,0.06)",
   shadowSm: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 0 },
@@ -96,7 +98,7 @@ const DARK = {
 
 type ThemeColors = typeof LIGHT;
 
-export default function UndanganIndex() {
+export default function MemoIndex() {
   const router = useRouter();
   const { isDark, toggleDark } = useTheme();
   const C: ThemeColors = isDark ? DARK : LIGHT;
@@ -108,8 +110,8 @@ export default function UndanganIndex() {
   const loadCounts = useCallback(async () => {
     try {
       const [masukRes, keluarRes] = await Promise.all([
-        apiFetch("/undangans/masuk"),
-        apiFetch("/undangans/keluar"),
+        apiFetch("/memos/masuk"),
+        apiFetch("/memos/keluar"),
       ]);
 
       const masuk = masukRes?.data ?? masukRes;
@@ -178,18 +180,16 @@ export default function UndanganIndex() {
           <View
             style={[
               s.headerIconWrap,
-              { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+              { backgroundColor: C.accentBg, borderColor: C.accentBorder },
             ]}
           >
-            <FontAwesome6 name="calendar-check" size={16} color={C.purple} />
+            <FontAwesome6 name="envelope" size={16} color={C.accent} />
           </View>
 
           <View>
-            <Text style={[s.headerTitle, { color: C.textPrimary }]}>
-              Undangan
-            </Text>
+            <Text style={[s.headerTitle, { color: C.textPrimary }]}>Memo</Text>
             <Text style={[s.headerSub, { color: C.textTertiary }]}>
-              Jadwal & undangan rapat
+              Surat menyurat internal
             </Text>
           </View>
         </View>
@@ -218,8 +218,8 @@ export default function UndanganIndex() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={[C.purple]}
-            tintColor={C.purple}
+            colors={[C.accent]}
+            tintColor={C.accent}
             progressBackgroundColor={C.surface}
           />
         }
@@ -227,12 +227,12 @@ export default function UndanganIndex() {
         <View
           style={[
             s.banner,
-            { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+            { backgroundColor: C.accentBg, borderColor: C.accentBorder },
           ]}
         >
-          <View style={[s.bannerDot, { backgroundColor: C.purple }]} />
-          <Text style={[s.bannerText, { color: C.purple }]}>
-            Pilih kategori undangan yang ingin ditampilkan
+          <View style={[s.bannerDot, { backgroundColor: C.accent }]} />
+          <Text style={[s.bannerText, { color: C.accent }]}>
+            Pilih kategori memo yang ingin ditampilkan
           </Text>
         </View>
 
@@ -244,35 +244,31 @@ export default function UndanganIndex() {
               C.shadowMd,
             ]}
             activeOpacity={0.82}
-            onPress={() => router.push("/undangan/undangan-masuk" as any)}
+            onPress={() => router.push("/memo/memo-masuk" as any)}
           >
-            <View style={[s.cardGlow, { backgroundColor: C.purpleBg }]} />
-            <View style={[s.cardStrip, { backgroundColor: C.purple }]} />
+            <View style={[s.cardGlow, { backgroundColor: C.blueBg }]} />
+            <View style={[s.cardStrip, { backgroundColor: C.blue }]} />
 
             <View style={s.cardBody}>
               <View style={s.cardTopRow}>
                 <View
                   style={[
                     s.cardIconWrap,
-                    { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                    { backgroundColor: C.blueBg, borderColor: C.blueBd },
                   ]}
                 >
-                  <FontAwesome6
-                    name="calendar-days"
-                    size={26}
-                    color={C.purple}
-                  />
+                  <FontAwesome6 name="envelope-open" size={26} color={C.blue} />
                 </View>
 
                 {countMasuk !== null && (
                   <View
                     style={[
                       s.countBadge,
-                      { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                      { backgroundColor: C.blueBg, borderColor: C.blueBd },
                     ]}
                   >
-                    <View style={[s.countDot, { backgroundColor: C.purple }]} />
-                    <Text style={[s.countText, { color: C.purple }]}>
+                    <View style={[s.countDot, { backgroundColor: C.blue }]} />
+                    <Text style={[s.countText, { color: C.blue }]}>
                       {countMasuk} dokumen
                     </Text>
                   </View>
@@ -280,11 +276,11 @@ export default function UndanganIndex() {
               </View>
 
               <Text style={[s.cardTitle, { color: C.textPrimary }]}>
-                Undangan Masuk
+                Memo Masuk
               </Text>
 
               <Text style={[s.cardDesc, { color: C.textTertiary }]}>
-                Undangan rapat yang diterima dan ditujukan kepada Anda
+                Memo yang diterima dan ditujukan kepada Anda
               </Text>
 
               <View
@@ -292,17 +288,17 @@ export default function UndanganIndex() {
               />
 
               <View style={s.cardCta}>
-                <Text style={[s.cardCtaText, { color: C.purple }]}>
-                  Lihat Undangan Masuk
+                <Text style={[s.cardCtaText, { color: C.blue }]}>
+                  Lihat Memo Masuk
                 </Text>
 
                 <View
                   style={[
                     s.cardCtaArrow,
-                    { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                    { backgroundColor: C.blueBg, borderColor: C.blueBd },
                   ]}
                 >
-                  <FontAwesome6 name="arrow-right" size={11} color={C.purple} />
+                  <FontAwesome6 name="arrow-right" size={11} color={C.blue} />
                 </View>
               </View>
             </View>
@@ -315,40 +311,31 @@ export default function UndanganIndex() {
               C.shadowMd,
             ]}
             activeOpacity={0.82}
-            onPress={() => router.push("/undangan/undangan-keluar" as any)}
+            onPress={() => router.push("/memo/memo-keluar" as any)}
           >
-            <View style={[s.cardGlow, { backgroundColor: C.purple2Bg }]} />
-            <View style={[s.cardStrip, { backgroundColor: C.purple2 }]} />
+            <View style={[s.cardGlow, { backgroundColor: C.blue2Bg }]} />
+            <View style={[s.cardStrip, { backgroundColor: C.blue2 }]} />
 
             <View style={s.cardBody}>
               <View style={s.cardTopRow}>
                 <View
                   style={[
                     s.cardIconWrap,
-                    { backgroundColor: C.purple2Bg, borderColor: C.purple2Bd },
+                    { backgroundColor: C.blue2Bg, borderColor: C.blue2Bd },
                   ]}
                 >
-                  <FontAwesome6
-                    name="calendar-check"
-                    size={26}
-                    color={C.purple2}
-                  />
+                  <FontAwesome6 name="envelope" size={26} color={C.blue2} />
                 </View>
 
                 {countKeluar !== null && (
                   <View
                     style={[
                       s.countBadge,
-                      {
-                        backgroundColor: C.purple2Bg,
-                        borderColor: C.purple2Bd,
-                      },
+                      { backgroundColor: C.blue2Bg, borderColor: C.blue2Bd },
                     ]}
                   >
-                    <View
-                      style={[s.countDot, { backgroundColor: C.purple2 }]}
-                    />
-                    <Text style={[s.countText, { color: C.purple2 }]}>
+                    <View style={[s.countDot, { backgroundColor: C.blue2 }]} />
+                    <Text style={[s.countText, { color: C.blue2 }]}>
                       {countKeluar} dokumen
                     </Text>
                   </View>
@@ -356,11 +343,11 @@ export default function UndanganIndex() {
               </View>
 
               <Text style={[s.cardTitle, { color: C.textPrimary }]}>
-                Undangan Keluar
+                Memo Keluar
               </Text>
 
               <Text style={[s.cardDesc, { color: C.textTertiary }]}>
-                Undangan rapat yang telah dikirimkan dari akun Anda
+                Memo yang telah dikirimkan dari akun Anda
               </Text>
 
               <View
@@ -368,21 +355,17 @@ export default function UndanganIndex() {
               />
 
               <View style={s.cardCta}>
-                <Text style={[s.cardCtaText, { color: C.purple2 }]}>
-                  Lihat Undangan Keluar
+                <Text style={[s.cardCtaText, { color: C.blue2 }]}>
+                  Lihat Memo Keluar
                 </Text>
 
                 <View
                   style={[
                     s.cardCtaArrow,
-                    { backgroundColor: C.purple2Bg, borderColor: C.purple2Bd },
+                    { backgroundColor: C.blue2Bg, borderColor: C.blue2Bd },
                   ]}
                 >
-                  <FontAwesome6
-                    name="arrow-right"
-                    size={11}
-                    color={C.purple2}
-                  />
+                  <FontAwesome6 name="arrow-right" size={11} color={C.blue2} />
                 </View>
               </View>
             </View>
@@ -410,12 +393,12 @@ export default function UndanganIndex() {
 
             <View style={s.infoContent}>
               <Text style={[s.infoTitle, { color: C.textPrimary }]}>
-                Tentang Undangan
+                Tentang Memo
               </Text>
 
               <Text style={[s.infoDesc, { color: C.textTertiary }]}>
-                Undangan digunakan untuk mengelola informasi rapat, jadwal
-                kegiatan, peserta, serta detail pelaksanaan acara.
+                Memo adalah surat resmi internal yang digunakan untuk komunikasi
+                antar unit atau pegawai dalam lingkungan instansi.
               </Text>
             </View>
           </View>
@@ -457,11 +440,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 0.5,
     zIndex: 1,
   },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
   headerIconWrap: {
     width: 44,
     height: 44,
@@ -470,11 +449,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-  },
+  headerTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
   headerSub: {
     fontSize: 11,
     fontWeight: "500",
@@ -498,12 +473,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
 
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 110,
-    gap: 14,
-    zIndex: 1,
-  },
+  scrollContent: { padding: 16, paddingBottom: 110, gap: 14, zIndex: 1 },
 
   banner: {
     flexDirection: "row",
@@ -514,22 +484,10 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  bannerDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    flexShrink: 0,
-  },
-  bannerText: {
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-    flex: 1,
-  },
+  bannerDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
+  bannerText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.2, flex: 1 },
 
-  cardsWrap: {
-    gap: 14,
-  },
+  cardsWrap: { gap: 14 },
 
   card: {
     borderRadius: 20,
@@ -545,14 +503,8 @@ const s = StyleSheet.create({
     height: 130,
     borderRadius: 65,
   },
-  cardStrip: {
-    height: 3.5,
-    width: "100%",
-  },
-  cardBody: {
-    padding: 20,
-    gap: 6,
-  },
+  cardStrip: { height: 3.5, width: "100%" },
+  cardBody: { padding: 20, gap: 6 },
   cardTopRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -576,16 +528,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  countDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  countText: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
+  countDot: { width: 6, height: 6, borderRadius: 3 },
+  countText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2 },
   cardTitle: {
     fontSize: 20,
     fontWeight: "800",
@@ -598,20 +542,13 @@ const s = StyleSheet.create({
     lineHeight: 18,
     letterSpacing: 0.1,
   },
-  cardDivider: {
-    height: 0.5,
-    marginVertical: 12,
-  },
+  cardDivider: { height: 0.5, marginVertical: 12 },
   cardCta: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  cardCtaText: {
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 0.1,
-  },
+  cardCtaText: { fontSize: 13, fontWeight: "700", letterSpacing: 0.1 },
   cardCtaArrow: {
     width: 32,
     height: 32,
@@ -627,18 +564,8 @@ const s = StyleSheet.create({
     overflow: "hidden",
     position: "relative",
   },
-  infoTopLine: {
-    position: "absolute",
-    top: 0,
-    left: 30,
-    right: 30,
-    height: 1,
-  },
-  infoRow: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 14,
-  },
+  infoTopLine: { position: "absolute", top: 0, left: 30, right: 30, height: 1 },
+  infoRow: { flexDirection: "row", gap: 12, padding: 14 },
   infoIcon: {
     width: 34,
     height: 34,
@@ -649,15 +576,8 @@ const s = StyleSheet.create({
     flexShrink: 0,
     marginTop: 2,
   },
-  infoContent: {
-    flex: 1,
-    gap: 4,
-  },
-  infoTitle: {
-    fontSize: 12.5,
-    fontWeight: "700",
-    letterSpacing: -0.1,
-  },
+  infoContent: { flex: 1, gap: 4 },
+  infoTitle: { fontSize: 12.5, fontWeight: "700", letterSpacing: -0.1 },
   infoDesc: {
     fontSize: 11.5,
     fontWeight: "500",

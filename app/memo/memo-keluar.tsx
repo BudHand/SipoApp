@@ -3,7 +3,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { apiFetch } from "@/utils/api";
 import { formatTanggalID } from "@/utils/date";
 import { FontAwesome6 } from "@expo/vector-icons";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,40 +22,39 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 type Status = "pending" | "correction" | "approve" | "reject";
 
-interface RisalahItem {
-  id_risalah: number;
+interface MemoItem {
+  id_memo: number;
   judul: string;
+  nomor_memo?: string;
   status: Status;
+  nama_pembuat?: string;
+  tujuan_string?: string[] | string;
   created_at?: string;
   updated_at?: string;
+  tgl_memo?: string;
   tgl_dibuat?: string;
   tgl_disahkan?: string;
-  tgl_rapat?: string;
-  waktu_mulai?: string;
-  waktu_selesai?: string;
-  tempat?: string;
+  isi_memo?: string;
   kode?: string;
   kode_bagian?: string;
   nama_bagian?: string;
-  nama_pembuat?: string;
-  tujuan_string?: string[] | string;
-  pemimpin_acara?: string;
-  notulis_acara?: string;
+  lampiran_url?: string | null;
+  pdf_url?: string;
 }
 
 const LIGHT = {
   bg: "#F4F7FB",
   surface: "#FFFFFF",
   surface2: "#F8FAFE",
-  surface3: "#EDFBF4",
+  surface3: "#F1F5FF",
   border: "#E6ECF5",
   borderSoft: "#EEF2F7",
-  primary: "#1A8A4A",
+  navy: "#173B78",
   textPrimary: "#0D1829",
   textSecondary: "#5B6F8F",
-  iconBg: "#E7FAEE",
-  activeBg: "#EDFBF4",
-  activeBorder: "#C8EED8",
+  textMuted: "#8DA2BF",
+  iconBg: "#EAF0FF",
+  activeBg: "#EEF4FF",
   danger: "#C62E2E",
   dangerBg: "#FFECEC",
   dangerBorder: "#FFD0D0",
@@ -72,15 +71,15 @@ const DARK = {
   bg: "#060B18",
   surface: "#0C1220",
   surface2: "#0F1828",
-  surface3: "#0A2018",
+  surface3: "#141E30",
   border: "rgba(255,255,255,0.1)",
   borderSoft: "rgba(255,255,255,0.07)",
-  primary: "#00CC80",
+  navy: "#00D4FF",
   textPrimary: "rgba(255,255,255,0.9)",
   textSecondary: "rgba(255,255,255,0.55)",
-  iconBg: "rgba(0,200,120,0.13)",
-  activeBg: "rgba(0,200,120,0.13)",
-  activeBorder: "rgba(0,200,120,0.25)",
+  textMuted: "rgba(255,255,255,0.35)",
+  iconBg: "rgba(0,212,255,0.08)",
+  activeBg: "rgba(0,212,255,0.12)",
   danger: "#FF6B7A",
   dangerBg: "rgba(255,77,109,0.1)",
   dangerBorder: "rgba(255,77,109,0.25)",
@@ -105,9 +104,9 @@ const statusOptions = [
 const getStatusConfig = (C: ThemeColors) => ({
   pending: {
     label: "Pending",
-    color: C.primary,
+    color: C.navy,
     soft: C.activeBg,
-    border: C.activeBorder,
+    border: C.border,
   },
   correction: {
     label: "Correction",
@@ -145,11 +144,9 @@ const getKodeValue = (item: any) => {
   return item?.kode_bagian || item?.kode || item?.value || "";
 };
 
-const getRisalahKode = (item: RisalahItem) => {
-  return item.kode_bagian || item.kode || "-";
-};
+const getMemoKode = (item: MemoItem) => item.kode_bagian || item.kode || "-";
 
-const getRisalahBagian = (item: RisalahItem) => {
+const getMemoBagian = (item: MemoItem) => {
   const kode = item.kode_bagian || item.kode || "";
   const nama = item.nama_bagian || "";
 
@@ -163,23 +160,19 @@ const getTujuanText = (tujuan?: string[] | string) => {
   return tujuan;
 };
 
-export default function RisalahScreen() {
+export default function MemoKeluarScreen() {
   const router = useRouter();
-  const { approval } = useLocalSearchParams<{ approval?: string }>();
   const { isDark } = useTheme();
-
   const C: ThemeColors = isDark ? DARK : LIGHT;
   const statusConfig = getStatusConfig(C);
 
-  const [allRisalah, setAllRisalah] = useState<RisalahItem[]>([]);
-  const [risalah, setRisalah] = useState<RisalahItem[]>([]);
+  const [allMemos, setAllMemos] = useState<MemoItem[]>([]);
+  const [memos, setMemos] = useState<MemoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
-  const [status, setStatus] = useState<string | null>(
-    approval === "1" ? "pending" : null,
-  );
+  const [status, setStatus] = useState<string | null>(null);
   const [kodeBagian, setKodeBagian] = useState<string | null>(null);
 
   const [kodeOptions, setKodeOptions] = useState<
@@ -197,7 +190,7 @@ export default function RisalahScreen() {
   }, [kodeBagian, kodeOptions]);
 
   const applyLocalFilter = useCallback(
-    (data: RisalahItem[]) => {
+    (data: MemoItem[]) => {
       const selectedKode = String(kodeBagian || "")
         .trim()
         .toUpperCase();
@@ -219,7 +212,7 @@ export default function RisalahScreen() {
 
   const fetchKodeOptions = useCallback(async () => {
     try {
-      const raw = await apiFetch("/risalahs/kode");
+      const raw = await apiFetch("/memos/kode");
       const data = Array.isArray(raw) ? raw : (raw?.data ?? []);
 
       const formatted = (data ?? [])
@@ -236,16 +229,15 @@ export default function RisalahScreen() {
 
       setKodeOptions(uniqueOptions);
     } catch (err) {
-      console.error("Gagal ambil opsi kode bagian risalah:", err);
+      console.error("Gagal ambil opsi kode bagian:", err);
     }
   }, []);
 
-  const fetchRisalah = useCallback(async () => {
+  const fetchMemos = useCallback(async () => {
     try {
-      let url = "/risalahs";
+      let url = "/memos/keluar";
       const params = new URLSearchParams();
 
-      if (approval === "1") params.append("approval", "true");
       if (status) params.append("status", status);
       if (kodeBagian) params.append("kode", kodeBagian);
 
@@ -253,51 +245,49 @@ export default function RisalahScreen() {
       if (queryString) url += `?${queryString}`;
 
       const res = await apiFetch(url);
-      const arr: RisalahItem[] = Array.isArray(res) ? res : (res?.data ?? []);
+      const arr: MemoItem[] = Array.isArray(res) ? res : (res?.data ?? []);
       const filteredData = applyLocalFilter(arr);
 
-      setAllRisalah(arr);
-      setRisalah(filteredData);
+      setAllMemos(arr);
+      setMemos(filteredData);
     } catch (err) {
-      console.error("Gagal ambil risalah:", err);
-      Alert.alert("Error", "Gagal memuat risalah. Silakan coba lagi.");
+      console.error("Gagal ambil memo keluar:", err);
+      Alert.alert("Error", "Gagal memuat memo keluar. Silakan coba lagi.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [approval, status, kodeBagian, applyLocalFilter]);
+  }, [status, kodeBagian, applyLocalFilter]);
 
   useEffect(() => {
     fetchKodeOptions();
   }, [fetchKodeOptions]);
 
   useEffect(() => {
-    fetchRisalah();
-  }, [fetchRisalah]);
+    fetchMemos();
+  }, [fetchMemos]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchRisalah();
-  }, [fetchRisalah]);
+    fetchMemos();
+  }, [fetchMemos]);
 
   const handleReset = () => {
-    setStatus(approval === "1" ? "pending" : null);
+    setStatus(null);
     setKodeBagian(null);
   };
 
-  const totalDokumen = risalah.length;
-  const totalSemuaDokumen = allRisalah.length;
+  const totalDokumen = memos.length;
+  const totalSemuaDokumen = allMemos.length;
 
-  const approvedCount = risalah.filter(
+  const approvedCount = memos.filter(
     (item) => item.status === "approve",
   ).length;
-  const pendingCount = risalah.filter(
-    (item) => item.status === "pending",
-  ).length;
-  const correctionCount = risalah.filter(
+  const pendingCount = memos.filter((item) => item.status === "pending").length;
+  const correctionCount = memos.filter(
     (item) => item.status === "correction",
   ).length;
-  const rejectCount = risalah.filter((item) => item.status === "reject").length;
+  const rejectCount = memos.filter((item) => item.status === "reject").length;
 
   if (loading) {
     return (
@@ -310,37 +300,35 @@ export default function RisalahScreen() {
             backgroundColor={C.bg}
           />
 
-          <ActivityIndicator size="large" color={C.primary} />
+          <ActivityIndicator size="large" color={C.navy} />
 
           <Text style={[styles.loadingText, { color: C.textSecondary }]}>
-            Memuat risalah...
+            Memuat memo keluar...
           </Text>
         </SafeAreaView>
       </>
     );
   }
 
-  const isEmpty = risalah.length === 0;
+  const isEmpty = memos.length === 0;
 
   return (
     <>
-      {approval !== "1" && (
-        <MemoFilterModal
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-          title="Filter Risalah"
-          subtitle="Saring risalah berdasarkan status dan kode bagian"
-          statusOptions={statusOptions}
-          kodeOptions={kodeOptions}
-          initialStatus={status}
-          initialKodeBagian={kodeBagian}
-          onApply={(filters) => {
-            setStatus(filters.status);
-            setKodeBagian(filters.kodeBagian);
-          }}
-          isDark={isDark}
-        />
-      )}
+      <MemoFilterModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        title="Filter Memo Keluar"
+        subtitle="Saring memo keluar berdasarkan status dan kode bagian"
+        statusOptions={statusOptions}
+        kodeOptions={kodeOptions}
+        initialStatus={status}
+        initialKodeBagian={kodeBagian}
+        onApply={(filters) => {
+          setStatus(filters.status);
+          setKodeBagian(filters.kodeBagian);
+        }}
+        isDark={isDark}
+      />
 
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -370,38 +358,36 @@ export default function RisalahScreen() {
               accessibilityRole="button"
               accessibilityLabel="Kembali ke Beranda"
             >
-              <FontAwesome6 name="chevron-left" size={18} color={C.primary} />
+              <FontAwesome6 name="chevron-left" size={18} color={C.navy} />
             </Pressable>
 
             <View style={styles.headerTitleWrap}>
-              <Text style={[styles.headerTitle, { color: C.primary }]}>
-                Risalah Rapat
+              <Text style={[styles.headerTitle, { color: C.navy }]}>
+                Memo Keluar
               </Text>
 
               <Text style={[styles.headerSubtitle, { color: C.textSecondary }]}>
-                Daftar risalah rapat yang tersedia
+                Daftar memo yang telah dikirim
               </Text>
             </View>
 
-            {approval !== "1" && (
-              <TouchableOpacity
-                onPress={() => setModalVisible(true)}
-                style={[
-                  styles.filterBtn,
-                  {
-                    backgroundColor: hasFilter ? C.primary : C.surface,
-                    borderColor: hasFilter ? C.primary : C.border,
-                  },
-                ]}
-                activeOpacity={0.7}
-              >
-                <FontAwesome6
-                  name="sliders"
-                  size={17}
-                  color={hasFilter ? "#FFFFFF" : C.primary}
-                />
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              onPress={() => setModalVisible(true)}
+              style={[
+                styles.filterBtn,
+                {
+                  backgroundColor: hasFilter ? C.navy : C.surface,
+                  borderColor: hasFilter ? C.navy : C.border,
+                },
+              ]}
+              activeOpacity={0.7}
+            >
+              <FontAwesome6
+                name="sliders"
+                size={17}
+                color={hasFilter ? "#FFFFFF" : C.navy}
+              />
+            </TouchableOpacity>
           </View>
 
           <View
@@ -415,14 +401,14 @@ export default function RisalahScreen() {
               <View
                 style={[styles.headerInfoIcon, { backgroundColor: C.iconBg }]}
               >
-                <FontAwesome6 name="file-lines" size={18} color={C.primary} />
+                <FontAwesome6 name="paper-plane" size={18} color={C.navy} />
               </View>
 
               <View style={{ flex: 1 }}>
                 <Text
                   style={[styles.headerInfoLabel, { color: C.textPrimary }]}
                 >
-                  Total Risalah
+                  Total Memo Keluar
                 </Text>
 
                 <Text
@@ -430,7 +416,7 @@ export default function RisalahScreen() {
                 >
                   {hasFilter
                     ? `Menampilkan ${totalDokumen} dari ${totalSemuaDokumen} dokumen`
-                    : "Semua risalah rapat yang tersedia"}
+                    : "Semua memo keluar yang tersedia"}
                 </Text>
               </View>
             </View>
@@ -438,7 +424,7 @@ export default function RisalahScreen() {
             <View
               style={[styles.headerCountBox, { backgroundColor: C.surface3 }]}
             >
-              <Text style={[styles.headerCount, { color: C.primary }]}>
+              <Text style={[styles.headerCount, { color: C.navy }]}>
                 {totalDokumen}
               </Text>
 
@@ -456,13 +442,10 @@ export default function RisalahScreen() {
                 <View
                   style={[
                     styles.activeFilterChip,
-                    {
-                      backgroundColor: C.activeBg,
-                      borderColor: C.activeBorder,
-                    },
+                    { backgroundColor: C.activeBg, borderColor: C.border },
                   ]}
                 >
-                  <Text style={[styles.activeFilterText, { color: C.primary }]}>
+                  <Text style={[styles.activeFilterText, { color: C.navy }]}>
                     Status: {selectedStatusLabel}
                   </Text>
                 </View>
@@ -472,34 +455,29 @@ export default function RisalahScreen() {
                 <View
                   style={[
                     styles.activeFilterChip,
-                    {
-                      backgroundColor: C.activeBg,
-                      borderColor: C.activeBorder,
-                    },
+                    { backgroundColor: C.activeBg, borderColor: C.border },
                   ]}
                 >
-                  <Text style={[styles.activeFilterText, { color: C.primary }]}>
+                  <Text style={[styles.activeFilterText, { color: C.navy }]}>
                     Kode: {selectedKodeLabel}
                   </Text>
                 </View>
               )}
 
-              {approval !== "1" && (
-                <TouchableOpacity
-                  style={[
-                    styles.activeFilterReset,
-                    { backgroundColor: C.dangerBg },
-                  ]}
-                  onPress={handleReset}
-                  activeOpacity={0.8}
+              <TouchableOpacity
+                style={[
+                  styles.activeFilterReset,
+                  { backgroundColor: C.dangerBg },
+                ]}
+                onPress={handleReset}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[styles.activeFilterResetText, { color: C.danger }]}
                 >
-                  <Text
-                    style={[styles.activeFilterResetText, { color: C.danger }]}
-                  >
-                    Reset
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  Reset
+                </Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -514,8 +492,8 @@ export default function RisalahScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              colors={[C.primary]}
-              tintColor={C.primary}
+              colors={[C.navy]}
+              tintColor={C.navy}
               progressBackgroundColor={C.surface}
             />
           }
@@ -535,7 +513,7 @@ export default function RisalahScreen() {
                     { backgroundColor: C.surface, borderColor: C.border },
                   ]}
                 >
-                  <Text style={[styles.statValue, { color: C.primary }]}>
+                  <Text style={[styles.statValue, { color: C.navy }]}>
                     {value}
                   </Text>
 
@@ -553,30 +531,25 @@ export default function RisalahScreen() {
                 style={[styles.emptyIconWrapper, { backgroundColor: C.iconBg }]}
               >
                 <Image
-                  source={require("@/assets/icons/risalah/risalah_fill_green.png")}
+                  source={require("@/assets/icons/memo/memo_fill_blue.png")}
                   style={styles.emptyIcon}
                   resizeMode="contain"
                 />
               </View>
 
               <Text style={[styles.emptyTitle, { color: C.textPrimary }]}>
-                Belum Ada Risalah
+                Belum Ada Memo Keluar
               </Text>
 
               <Text style={[styles.emptyMessage, { color: C.textSecondary }]}>
-                {approval === "1"
-                  ? "Tidak ada risalah yang menunggu persetujuan Anda saat ini."
-                  : hasFilter
-                    ? "Tidak ada risalah yang sesuai dengan filter yang dipilih."
-                    : "Anda belum memiliki risalah rapat."}
+                {hasFilter
+                  ? "Tidak ada memo keluar yang sesuai dengan filter yang dipilih."
+                  : "Anda belum memiliki memo keluar."}
               </Text>
 
-              {hasFilter && approval !== "1" && (
+              {hasFilter && (
                 <TouchableOpacity
-                  style={[
-                    styles.clearFilterBtn,
-                    { backgroundColor: C.primary },
-                  ]}
+                  style={[styles.clearFilterBtn, { backgroundColor: C.navy }]}
                   onPress={handleReset}
                   activeOpacity={0.8}
                 >
@@ -585,81 +558,70 @@ export default function RisalahScreen() {
               )}
             </View>
           ) : (
-            risalah.map((item) => {
+            memos.map((item) => {
               const cfg = statusConfig[item.status] ?? statusConfig.pending;
 
-              const tanggal = item.tgl_rapat
-                ? formatTanggalID(item.tgl_rapat)
-                : item.tgl_dibuat
-                  ? formatTanggalID(item.tgl_dibuat)
-                  : item.tgl_disahkan
-                    ? formatTanggalID(item.tgl_disahkan)
+              const tanggal = item.tgl_dibuat
+                ? formatTanggalID(item.tgl_dibuat)
+                : item.tgl_disahkan
+                  ? formatTanggalID(item.tgl_disahkan)
+                  : item.tgl_memo
+                    ? formatTanggalID(item.tgl_memo)
                     : item.created_at
                       ? formatTanggalID(item.created_at)
-                      : item.updated_at
-                        ? formatTanggalID(item.updated_at)
-                        : "-";
+                      : "-";
 
               return (
                 <TouchableOpacity
-                  key={item.id_risalah}
+                  key={item.id_memo}
                   activeOpacity={0.85}
                   onPress={() =>
                     router.push({
-                      pathname: "/risalah/risalah-detail" as any,
+                      pathname: "/memo/memo-detail" as any,
                       params: {
-                        id: String(item.id_risalah),
-                        source: "risalah",
-                        from: "risalah",
+                        id: String(item.id_memo),
+                        jenis: "keluar",
+                        source: "memo-keluar",
+                        from: "memo-keluar",
                       },
                     })
                   }
                   style={[
-                    styles.risalahCard,
-                    {
-                      backgroundColor: C.surface,
-                      borderColor: C.border,
-                    },
+                    styles.memoCard,
+                    { backgroundColor: C.surface, borderColor: C.border },
                     C.shadow,
                   ]}
                 >
-                  <View style={styles.risalahCardHeader}>
+                  <View style={styles.memoCardHeader}>
                     <View
                       style={[
-                        styles.risalahIconBox,
+                        styles.memoIconBox,
                         { backgroundColor: C.iconBg },
                       ]}
                     >
-                      <FontAwesome6
-                        name="file-lines"
-                        size={16}
-                        color={C.primary}
-                      />
+                      <FontAwesome6 name="envelope" size={16} color={C.navy} />
                     </View>
 
                     <View style={{ flex: 1 }}>
                       <Text
-                        style={[styles.risalahTitle, { color: C.primary }]}
+                        style={[styles.memoTitle, { color: C.navy }]}
                         numberOfLines={2}
                       >
                         {item.judul || "Tanpa Judul"}
                       </Text>
 
                       <Text
-                        style={[
-                          styles.risalahNumber,
-                          { color: C.textSecondary },
-                        ]}
+                        style={[styles.memoNumber, { color: C.textSecondary }]}
                         numberOfLines={1}
                       >
-                        {tanggal}
+                        {item.nomor_memo || "Nomor memo belum tersedia"}
                       </Text>
                     </View>
                   </View>
 
                   <View
                     style={[
-                      styles.risalahMetaBox,
+                      styles.memoMetaBox,
                       {
                         backgroundColor: C.surface2,
                         borderColor: C.borderSoft,
@@ -668,22 +630,15 @@ export default function RisalahScreen() {
                   >
                     {[
                       ["Tanggal", tanggal],
-                      [
-                        "Waktu",
-                        `${item.waktu_mulai || "-"} - ${
-                          item.waktu_selesai || "-"
-                        }`,
-                      ],
-                      ["Tempat", item.tempat || "-"],
-                      ["Kode Bagian", getRisalahKode(item)],
-                      ["Bagian", getRisalahBagian(item)],
+                      ["Kode Bagian", getMemoKode(item)],
+                      ["Bagian", getMemoBagian(item)],
                       ["Tujuan", getTujuanText(item.tujuan_string)],
                       ["Pembuat", item.nama_pembuat || "-"],
                     ].map(([label, value]) => (
-                      <View style={styles.risalahMetaRow} key={label}>
+                      <View style={styles.memoMetaRow} key={label}>
                         <Text
                           style={[
-                            styles.risalahMetaLabel,
+                            styles.memoMetaLabel,
                             { color: C.textSecondary },
                           ]}
                         >
@@ -692,7 +647,7 @@ export default function RisalahScreen() {
 
                         <Text
                           style={[
-                            styles.risalahMetaValue,
+                            styles.memoMetaValue,
                             { color: C.textPrimary },
                           ]}
                           numberOfLines={1}
@@ -703,7 +658,7 @@ export default function RisalahScreen() {
                     ))}
                   </View>
 
-                  <View style={styles.risalahFooter}>
+                  <View style={styles.memoFooter}>
                     <View
                       style={[
                         styles.statusBadge,
@@ -733,16 +688,14 @@ export default function RisalahScreen() {
                         { backgroundColor: C.surface3 },
                       ]}
                     >
-                      <Text
-                        style={[styles.detailBtnText, { color: C.primary }]}
-                      >
+                      <Text style={[styles.detailBtnText, { color: C.navy }]}>
                         Detail
                       </Text>
 
                       <FontAwesome6
                         name="chevron-right"
                         size={10}
-                        color={C.primary}
+                        color={C.navy}
                       />
                     </View>
                   </View>
@@ -921,61 +874,60 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  risalahCard: {
+  memoCard: {
     borderRadius: 22,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
   },
-  risalahCardHeader: {
+  memoCardHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
     marginBottom: 14,
   },
-  risalahIconBox: {
+  memoIconBox: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  risalahTitle: {
+  memoTitle: {
     fontSize: 15,
     fontWeight: "800",
     lineHeight: 21,
   },
-  risalahNumber: {
+  memoNumber: {
     fontSize: 11,
     marginTop: 3,
   },
-  risalahMetaBox: {
+  memoMetaBox: {
     borderRadius: 16,
     padding: 12,
     gap: 8,
     borderWidth: 1,
   },
-  risalahMetaRow: {
+  memoMetaRow: {
     flexDirection: "row",
     alignItems: "center",
   },
-  risalahMetaLabel: {
+  memoMetaLabel: {
     width: 95,
     fontSize: 11,
     fontWeight: "700",
   },
-  risalahMetaValue: {
+  memoMetaValue: {
     flex: 1,
     fontSize: 11,
     fontWeight: "600",
   },
-  risalahFooter: {
+  memoFooter: {
     marginTop: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-
   statusBadge: {
     flexDirection: "row",
     alignItems: "center",

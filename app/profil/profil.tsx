@@ -1,30 +1,233 @@
 // app/profil/profil.tsx
-import { Colors } from "@/constants/colors";
-import { Fonts } from "@/constants/fonts";
+import { useTheme } from "@/context/ThemeContext";
 import { apiFetch } from "@/utils/api";
 import { FontAwesome6 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, Text, View } from "react-native";
-
-import Button from "@/components/button";
-import { useNavigation } from "@react-navigation/native";
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// ─── Theme tokens ──────────────────────────────────────────────────────────────
+
+const LIGHT = {
+  bg: "#F4F7FF",
+  surface: "#FFFFFF",
+  orb1: "rgba(37,99,235,0.10)",
+  orb2: "rgba(109,40,217,0.07)",
+  accent: "#2563EB",
+  accentDim: "rgba(37,99,235,0.07)",
+  accentBorder: "rgba(37,99,235,0.14)",
+  accentText: "rgba(37,99,235,0.75)",
+  accentRole: "rgba(37,99,235,0.6)",
+  topLine: "rgba(37,99,235,0.28)",
+  textPrimary: "#0F1E50",
+  textHigh: "rgba(15,30,80,0.85)",
+  textMid: "rgba(15,30,80,0.45)",
+  textLow: "rgba(15,30,80,0.30)",
+  textGhost: "rgba(15,30,80,0.20)",
+  border: "rgba(15,30,80,0.07)",
+  divider: "rgba(15,30,80,0.06)",
+  rowDivider: "rgba(15,30,80,0.05)",
+  avatarRingOuter: "rgba(37,99,235,0.28)",
+  avatarRingInner: "rgba(37,99,235,0.10)",
+  avatarBg: "#2563EB",
+  onlineBorder: "#F4F7FF",
+  btnBg: "#FFFFFF",
+  btnBorder: "rgba(15,30,80,0.09)",
+  logoutBg: "rgba(239,68,68,0.05)",
+  logoutBorder: "rgba(239,68,68,0.18)",
+  logoutTopLine: "rgba(239,68,68,0.25)",
+  logoutText: "rgba(220,38,38,0.85)",
+  panelShadowColor: "#2563EB",
+  versionText: "rgba(15,30,80,0.20)",
+};
+
+const DARK = {
+  bg: "#060B18",
+  surface: "#0C1220",
+  orb1: "rgba(0,132,255,0.13)",
+  orb2: "rgba(120,80,255,0.10)",
+  accent: "#00D4FF",
+  accentDim: "rgba(0,212,255,0.07)",
+  accentBorder: "rgba(0,212,255,0.14)",
+  accentText: "rgba(0,212,255,0.75)",
+  accentRole: "rgba(0,212,255,0.6)",
+  topLine: "rgba(0,212,255,0.28)",
+  textPrimary: "#FFFFFF",
+  textHigh: "rgba(255,255,255,0.85)",
+  textMid: "rgba(255,255,255,0.45)",
+  textLow: "rgba(255,255,255,0.28)",
+  textGhost: "rgba(255,255,255,0.18)",
+  border: "rgba(255,255,255,0.06)",
+  divider: "rgba(255,255,255,0.06)",
+  rowDivider: "rgba(255,255,255,0.05)",
+  avatarRingOuter: "rgba(0,212,255,0.25)",
+  avatarRingInner: "rgba(0,212,255,0.10)",
+  avatarBg: "#0084FF",
+  onlineBorder: "#060B18",
+  btnBg: "rgba(255,255,255,0.05)",
+  btnBorder: "rgba(255,255,255,0.08)",
+  logoutBg: "rgba(239,68,68,0.07)",
+  logoutBorder: "rgba(239,68,68,0.20)",
+  logoutTopLine: "rgba(239,68,68,0.28)",
+  logoutText: "rgba(239,68,68,0.8)",
+  panelShadowColor: "#000000",
+  versionText: "rgba(255,255,255,0.18)",
+};
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function getInitials(name: string): string {
+  const words = name?.trim().split(" ") ?? [];
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return (name ?? "--").slice(0, 2).toUpperCase();
+}
+
+type Theme = typeof LIGHT;
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
+
+function SectionDivider({ label, T }: { label: string; T: Theme }) {
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+        marginHorizontal: 14,
+        marginTop: 18,
+        marginBottom: 12,
+      }}
+    >
+      <View style={{ flex: 1, height: 1, backgroundColor: T.divider }} />
+      <Text
+        style={{
+          fontSize: 9.5,
+          fontWeight: "700",
+          color: T.textLow,
+          letterSpacing: 2,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </Text>
+      <View style={{ flex: 1, height: 1, backgroundColor: T.divider }} />
+    </View>
+  );
+}
+
+function InfoPanel({
+  icon,
+  title,
+  T,
+  children,
+}: {
+  icon: string;
+  title: string;
+  T: Theme;
+  children: React.ReactNode;
+}) {
+  return (
+    <View
+      style={[
+        ps.panel,
+        {
+          backgroundColor: T.surface,
+          borderColor: T.border,
+          shadowColor: T.panelShadowColor,
+        },
+      ]}
+    >
+      <View style={[ps.topLine, { backgroundColor: T.topLine }]} />
+      <View style={ps.header}>
+        <View
+          style={[
+            ps.iconWrap,
+            { backgroundColor: T.accentDim, borderColor: T.accentBorder },
+          ]}
+        >
+          <FontAwesome6 name={icon as any} size={12} color={T.accent} />
+        </View>
+        <Text style={[ps.title, { color: T.textPrimary }]}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+  pill,
+  T,
+  isLast,
+}: {
+  label: string;
+  value?: string;
+  pill?: boolean;
+  T: Theme;
+  isLast?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        ps.row,
+        !isLast && { borderBottomWidth: 1, borderBottomColor: T.rowDivider },
+      ]}
+    >
+      <Text style={[ps.rowLabel, { color: T.textLow }]}>
+        {label.toUpperCase()}
+      </Text>
+      {pill && value ? (
+        <View
+          style={[
+            ps.pill,
+            { backgroundColor: T.accentDim, borderColor: T.accentBorder },
+          ]}
+        >
+          <View style={[ps.pillDot, { backgroundColor: T.accent }]} />
+          <Text style={[ps.pillText, { color: T.accentText }]}>{value}</Text>
+        </View>
+      ) : (
+        <Text
+          style={[
+            ps.rowValue,
+            { color: value ? T.textHigh : T.textGhost },
+            !value && ps.rowValueEmpty,
+          ]}
+        >
+          {value || "-"}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// ─── Main ──────────────────────────────────────────────────────────────────────
+
 export default function ProfilScreen() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const version = Constants.expoConfig?.version ?? "1.0.0";
   const navigation = useNavigation();
+  const version = Constants.expoConfig?.version ?? "1.0.0";
+  const { isDark, toggleDark } = useTheme();
+  const T = isDark ? DARK : LIGHT;
+
   const handleLogout = async () => {
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "/login" }],
-    });
+    navigation.reset({ index: 0, routes: [{ name: "/login" as never }] });
     await AsyncStorage.removeItem("token");
     await AsyncStorage.removeItem("user");
     router.replace("/login");
@@ -34,7 +237,7 @@ export default function ProfilScreen() {
     const fetchUser = async () => {
       try {
         setLoading(true);
-        const data = await apiFetch(`/profile`);
+        const data = await apiFetch("/profile");
         setUser(data);
       } catch (err) {
         console.error(err);
@@ -42,28 +245,17 @@ export default function ProfilScreen() {
         setLoading(false);
       }
     };
-
     fetchUser();
   }, []);
 
+  // ── Loading ─────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <SafeAreaView
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: Colors.white,
-        }}
-      >
-        <StatusBar style="dark" />
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text
-          style={[
-            Fonts.paragraphMediumLarge,
-            { marginTop: 12, color: Colors.textSecondary },
-          ]}
-        >
+      <SafeAreaView style={[s.loadingScreen, { backgroundColor: T.bg }]}>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        <ActivityIndicator size="large" color={T.accent} />
+        <Text style={[s.loadingText, { color: T.textMid }]}>
           Memuat profil...
         </Text>
       </SafeAreaView>
@@ -72,160 +264,383 @@ export default function ProfilScreen() {
 
   if (!user) return null;
 
+  const initials = getInitials(user.fullname);
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
   return (
     <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#E8F1FF" }}
-      edges={["top", "left", "right"]}
+      style={[s.safe, { backgroundColor: T.bg }]}
+      edges={["top", "bottom"]}
     >
-      {/* 🔥 STATUS BAR opsi : (dark, light, auto) - Ubah jadi dark (text hitam) untuk background cerah */}
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? "light" : "dark"} />
 
-      {/* BODY SCROLL */}
+      <View
+        style={[s.orb1, { backgroundColor: T.orb1 }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[s.orb2, { backgroundColor: T.orb2 }]}
+        pointerEvents="none"
+      />
+
       <ScrollView
-        contentContainerStyle={{
-          paddingTop: 16,
-          paddingBottom: 120,
-        }}
-        style={{ backgroundColor: "#E8F1FF" }}
+        style={[s.scroll, { backgroundColor: T.bg }]}
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        {/* FOTO PROFIL */}
-        <View
-          style={{
-            alignItems: "center",
-            marginTop: 20,
-            marginBottom: 10,
-          }}
-        >
-          <View
-            style={{
-              width: 100,
-              height: 100,
-              borderRadius: 50,
-              justifyContent: "center",
-              alignItems: "center",
-              overflow: "hidden",
-              backgroundColor: Colors.navy,
-            }}
+        {/* ── HEADER ────────────────────────────────────────────────── */}
+        <View style={s.header}>
+          <TouchableOpacity
+            style={[
+              s.iconBtn,
+              { backgroundColor: T.btnBg, borderColor: T.btnBorder },
+            ]}
+            onPress={() => router.back()}
           >
+            <FontAwesome6 name="chevron-left" size={13} color={T.textMid} />
+          </TouchableOpacity>
+
+          <Text style={[s.pageTitle, { color: T.textPrimary }]}>
+            Profil Saya
+          </Text>
+
+          {/* 🌙 / ☀️  Theme toggle */}
+          <TouchableOpacity
+            style={[
+              s.iconBtn,
+              { backgroundColor: T.btnBg, borderColor: T.btnBorder },
+            ]}
+            onPress={toggleDark}
+            activeOpacity={0.75}
+          >
+            <FontAwesome6
+              name={isDark ? "moon" : "sun"}
+              size={13}
+              color={T.textMid}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── AVATAR ────────────────────────────────────────────────── */}
+        <View style={s.avatarSection}>
+          <View style={s.avatarOuter}>
+            <View
+              style={[s.avatarRingOuter, { borderColor: T.avatarRingOuter }]}
+            />
+            <View
+              style={[s.avatarRingInner, { borderColor: T.avatarRingInner }]}
+            />
             {user.profile_image ? (
               <Image
                 source={{ uri: user.profile_image }}
-                style={{ width: 100, height: 100 }}
+                style={s.avatarImage}
               />
             ) : (
               <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
+                style={[s.avatarPlaceholder, { backgroundColor: T.avatarBg }]}
               >
-                <FontAwesome6 name="user" size={56} color={Colors.white} />
+                <Text style={s.avatarInitials}>{initials}</Text>
               </View>
             )}
+            <View style={[s.onlineDot, { borderColor: T.onlineBorder }]} />
           </View>
-          <Text
-            style={[
-              Fonts.paragraphMediumLarge,
-              { marginTop: 12, color: Colors.textPrimary },
-            ]}
-          >
+          <Text style={[s.avatarName, { color: T.textPrimary }]}>
             {user.fullname}
           </Text>
-        </View>
-
-        {/* CARD 1 */}
-        <View
-          style={{
-            marginTop: 14,
-            marginHorizontal: 20,
-            padding: 16,
-            backgroundColor: Colors.white,
-            borderRadius: 12,
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
-        >
-          <Text
-            style={[
-              Fonts.paragraphMediumLarge,
-              { color: Colors.textPrimary, marginBottom: 12 },
-            ]}
-          >
-            Data Pribadi
+          <Text style={[s.avatarRole, { color: T.accentRole }]}>
+            Pegawai Aktif
           </Text>
-
-          <Row label="Nama Lengkap" value={user.fullname} />
-          <Row label="Email" value={user.email} />
-          <Row label="Nomor Telepon" value={user.phone_number} />
         </View>
 
-        {/* CARD 2 */}
+        {/* System banner */}
         <View
-          style={{
-            marginTop: 14,
-            marginHorizontal: 20,
-            padding: 16,
-            backgroundColor: Colors.white,
-            borderRadius: 12,
-            shadowColor: "#000",
-            shadowOpacity: 0.05,
-            shadowRadius: 4,
-            elevation: 2,
-          }}
+          style={[
+            s.sysBanner,
+            { backgroundColor: T.accentDim, borderColor: T.accentBorder },
+          ]}
         >
-          <Text
-            style={[
-              Fonts.paragraphMediumLarge,
-              { color: Colors.textPrimary, marginBottom: 12 },
-            ]}
-          >
-            Informasi Kepegawaian
+          <View style={[s.sysDot, { backgroundColor: T.accent }]} />
+          <Text style={[s.sysText, { color: T.accentText }]}>
+            Sistem SIPO aktif
           </Text>
-
-          <Row label="Nomor Induk Pegawai" value={user.nip} />
-          <Row label="Posisi" value={user.position || "-"} />
-          <Row label="Direktorat" value={user.direktorat || "-"} />
-          <Row label="Struktur Organisasi" value={user.organisasi || "-"} />
+          <Text style={[s.sysOnline, { color: T.textLow }]}>Online</Text>
         </View>
 
-        {/* LOGOUT */}
-        <View style={{ marginTop: 20, paddingHorizontal: 20 }}>
-          <Button title="Logout" onPress={handleLogout} color={Colors.danger} />
+        {/* ── DATA PRIBADI ──────────────────────────────────────────── */}
+        <SectionDivider label="Data Pribadi" T={T} />
+        <InfoPanel icon="user" title="Data Pribadi" T={T}>
+          <InfoRow label="Nama Lengkap" value={user.fullname} T={T} />
+          <InfoRow label="Email" value={user.email} T={T} />
+          <InfoRow
+            label="Nomor Telepon"
+            value={user.phone_number}
+            T={T}
+            isLast
+          />
+        </InfoPanel>
+
+        {/* ── KEPEGAWAIAN ───────────────────────────────────────────── */}
+        <SectionDivider label="Informasi Kepegawaian" T={T} />
+        <InfoPanel icon="briefcase" title="Informasi Kepegawaian" T={T}>
+          <InfoRow label="Nomor Induk Pegawai" value={user.nip} T={T} />
+          <InfoRow label="Posisi" value={user.position} pill T={T} />
+          <InfoRow label="Direktorat" value={user.direktorat} T={T} />
+          <InfoRow
+            label="Struktur Organisasi"
+            value={user.organisasi}
+            T={T}
+            isLast
+          />
+        </InfoPanel>
+
+        {/* ── LOGOUT ────────────────────────────────────────────────── */}
+        <View style={s.logoutWrap}>
+          <TouchableOpacity
+            style={[
+              s.logoutBtn,
+              { backgroundColor: T.logoutBg, borderColor: T.logoutBorder },
+            ]}
+            onPress={handleLogout}
+            activeOpacity={0.75}
+          >
+            <View
+              style={[s.logoutTopLine, { backgroundColor: T.logoutTopLine }]}
+            />
+            <FontAwesome6
+              name="right-from-bracket"
+              size={14}
+              color={T.logoutText}
+            />
+            <Text style={[s.logoutText, { color: T.logoutText }]}>
+              Keluar dari Akun
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* VERSION */}
-        <Text
-          style={{
-            textAlign: "center",
-            marginTop: 8,
-            color: Colors.textSecondary,
-            marginBottom: 20,
-          }}
-        >
-          Versi {version}
+        <Text style={[s.version, { color: T.versionText }]}>
+          SIPO MOBILE v{version}
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const Row = ({ label, value }) => (
-  <View style={{ marginBottom: 10 }}>
-    <Text style={[Fonts.paragraphMediumSmall, { color: Colors.textSecondary }]}>
-      {label}
-    </Text>
-    <Text
-      style={{
-        color: Colors.textPrimary,
-        fontSize: 15,
-        marginTop: 2,
-        fontWeight: "500",
-      }}
-    >
-      {value || "-"}
-    </Text>
-  </View>
-);
+// ─── Styles ────────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  safe: { flex: 1 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 120 },
+  loadingScreen: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: { fontSize: 13, fontWeight: "500" },
+  orb1: {
+    position: "absolute",
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    top: -60,
+    right: -70,
+    zIndex: 0,
+  },
+  orb2: {
+    position: "absolute",
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    top: 220,
+    left: -50,
+    zIndex: 0,
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 4,
+    zIndex: 2,
+  },
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pageTitle: { fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
+  avatarSection: {
+    alignItems: "center",
+    paddingTop: 28,
+    paddingBottom: 20,
+    zIndex: 2,
+  },
+  avatarOuter: {
+    width: 88,
+    height: 88,
+    position: "relative",
+    marginBottom: 14,
+  },
+  avatarRingOuter: {
+    position: "absolute",
+    width: 98,
+    height: 98,
+    top: -5,
+    left: -5,
+    borderRadius: 49,
+    borderWidth: 1.5,
+  },
+  avatarRingInner: {
+    position: "absolute",
+    width: 92,
+    height: 92,
+    top: -2,
+    left: -2,
+    borderRadius: 46,
+    borderWidth: 1,
+  },
+  avatarImage: { width: 88, height: 88, borderRadius: 44 },
+  avatarPlaceholder: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -1,
+  },
+  onlineDot: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#10B981",
+    borderWidth: 3,
+  },
+  avatarName: {
+    fontSize: 19,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginBottom: 5,
+  },
+  avatarRole: {
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  sysBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    marginHorizontal: 14,
+    zIndex: 2,
+  },
+  sysDot: { width: 7, height: 7, borderRadius: 3.5 },
+  sysText: { flex: 1, fontSize: 11, fontWeight: "600", letterSpacing: 0.3 },
+  sysOnline: { fontSize: 10, fontWeight: "500" },
+  logoutWrap: {
+    paddingHorizontal: 14,
+    paddingTop: 6,
+    paddingBottom: 14,
+    zIndex: 2,
+  },
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    position: "relative",
+  },
+  logoutTopLine: {
+    position: "absolute",
+    top: 0,
+    left: 40,
+    right: 40,
+    height: 1,
+  },
+  logoutText: { fontSize: 13, fontWeight: "700", letterSpacing: 0.2 },
+  version: {
+    textAlign: "center",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    paddingBottom: 20,
+    zIndex: 2,
+  },
+});
+
+const ps = StyleSheet.create({
+  panel: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginHorizontal: 14,
+    marginBottom: 12,
+    overflow: "hidden",
+    position: "relative",
+    zIndex: 2,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  topLine: { position: "absolute", top: 0, left: 40, right: 40, height: 1.5 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  iconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { fontSize: 12.5, fontWeight: "800", letterSpacing: -0.2 },
+  row: { paddingVertical: 10 },
+  rowLabel: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  rowValue: { fontSize: 13.5, fontWeight: "600", letterSpacing: -0.1 },
+  rowValueEmpty: { fontStyle: "italic", fontWeight: "400" },
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignSelf: "flex-start",
+  },
+  pillDot: { width: 5, height: 5, borderRadius: 2.5 },
+  pillText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.3 },
+});

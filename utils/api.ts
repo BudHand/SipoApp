@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Linking } from "react-native";
 
 const API_URL = "https://sipo.ptrekaindo.co.id/api";
+// const API_URL = "http://127.0.0.1:8000/api";
 
 export const apiFetch = async (endpoint: string, options: any = {}) => {
   try {

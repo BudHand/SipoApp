@@ -22,15 +22,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 type Status = "pending" | "correction" | "approve" | "reject";
 
-interface RisalahItem {
-  id_risalah: number;
+interface UndanganItem {
+  id_undangan: number;
   judul: string;
   status: Status;
-  created_at?: string;
-  updated_at?: string;
+  tgl_rapat?: string;
   tgl_dibuat?: string;
   tgl_disahkan?: string;
-  tgl_rapat?: string;
+  updated_at?: string;
   waktu_mulai?: string;
   waktu_selesai?: string;
   tempat?: string;
@@ -39,28 +38,26 @@ interface RisalahItem {
   nama_bagian?: string;
   nama_pembuat?: string;
   tujuan_string?: string[] | string;
-  pemimpin_acara?: string;
-  notulis_acara?: string;
 }
 
 const LIGHT = {
   bg: "#F4F7FB",
   surface: "#FFFFFF",
   surface2: "#F8FAFE",
-  surface3: "#EDFBF4",
+  surface3: "#F7F2FF",
   border: "#E6ECF5",
   borderSoft: "#EEF2F7",
-  primary: "#1A8A4A",
+  primary: "#6B3FA8",
   textPrimary: "#0D1829",
   textSecondary: "#5B6F8F",
-  iconBg: "#E7FAEE",
-  activeBg: "#EDFBF4",
-  activeBorder: "#C8EED8",
+  iconBg: "#F2ECFF",
+  activeBg: "#F3EDFF",
+  activeBorder: "#E1D3FF",
   danger: "#C62E2E",
   dangerBg: "#FFECEC",
   dangerBorder: "#FFD0D0",
   shadow: {
-    shadowColor: "#1A3C8C",
+    shadowColor: "#3A1A8C",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -72,15 +69,15 @@ const DARK = {
   bg: "#060B18",
   surface: "#0C1220",
   surface2: "#0F1828",
-  surface3: "#0A2018",
+  surface3: "#160E32",
   border: "rgba(255,255,255,0.1)",
   borderSoft: "rgba(255,255,255,0.07)",
-  primary: "#00CC80",
+  primary: "#BB88FF",
   textPrimary: "rgba(255,255,255,0.9)",
   textSecondary: "rgba(255,255,255,0.55)",
-  iconBg: "rgba(0,200,120,0.13)",
-  activeBg: "rgba(0,200,120,0.13)",
-  activeBorder: "rgba(0,200,120,0.25)",
+  iconBg: "rgba(120,80,255,0.13)",
+  activeBg: "rgba(120,80,255,0.13)",
+  activeBorder: "rgba(120,80,255,0.25)",
   danger: "#FF6B7A",
   dangerBg: "rgba(255,77,109,0.1)",
   dangerBorder: "rgba(255,77,109,0.25)",
@@ -145,11 +142,11 @@ const getKodeValue = (item: any) => {
   return item?.kode_bagian || item?.kode || item?.value || "";
 };
 
-const getRisalahKode = (item: RisalahItem) => {
+const getUndanganKode = (item: UndanganItem) => {
   return item.kode_bagian || item.kode || "-";
 };
 
-const getRisalahBagian = (item: RisalahItem) => {
+const getUndanganBagian = (item: UndanganItem) => {
   const kode = item.kode_bagian || item.kode || "";
   const nama = item.nama_bagian || "";
 
@@ -163,7 +160,7 @@ const getTujuanText = (tujuan?: string[] | string) => {
   return tujuan;
 };
 
-export default function RisalahScreen() {
+export default function UndanganMasukScreen() {
   const router = useRouter();
   const { approval } = useLocalSearchParams<{ approval?: string }>();
   const { isDark } = useTheme();
@@ -171,8 +168,8 @@ export default function RisalahScreen() {
   const C: ThemeColors = isDark ? DARK : LIGHT;
   const statusConfig = getStatusConfig(C);
 
-  const [allRisalah, setAllRisalah] = useState<RisalahItem[]>([]);
-  const [risalah, setRisalah] = useState<RisalahItem[]>([]);
+  const [allUndangans, setAllUndangans] = useState<UndanganItem[]>([]);
+  const [undangans, setUndangans] = useState<UndanganItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -197,7 +194,7 @@ export default function RisalahScreen() {
   }, [kodeBagian, kodeOptions]);
 
   const applyLocalFilter = useCallback(
-    (data: RisalahItem[]) => {
+    (data: UndanganItem[]) => {
       const selectedKode = String(kodeBagian || "")
         .trim()
         .toUpperCase();
@@ -219,7 +216,7 @@ export default function RisalahScreen() {
 
   const fetchKodeOptions = useCallback(async () => {
     try {
-      const raw = await apiFetch("/risalahs/kode");
+      const raw = await apiFetch("/undangans/kode");
       const data = Array.isArray(raw) ? raw : (raw?.data ?? []);
 
       const formatted = (data ?? [])
@@ -236,16 +233,15 @@ export default function RisalahScreen() {
 
       setKodeOptions(uniqueOptions);
     } catch (err) {
-      console.error("Gagal ambil opsi kode bagian risalah:", err);
+      console.error("Gagal ambil opsi kode bagian undangan:", err);
     }
   }, []);
 
-  const fetchRisalah = useCallback(async () => {
+  const fetchUndangans = useCallback(async () => {
     try {
-      let url = "/risalahs";
+      let url = "/undangans/masuk";
       const params = new URLSearchParams();
 
-      if (approval === "1") params.append("approval", "true");
       if (status) params.append("status", status);
       if (kodeBagian) params.append("kode", kodeBagian);
 
@@ -253,51 +249,53 @@ export default function RisalahScreen() {
       if (queryString) url += `?${queryString}`;
 
       const res = await apiFetch(url);
-      const arr: RisalahItem[] = Array.isArray(res) ? res : (res?.data ?? []);
+      const arr: UndanganItem[] = Array.isArray(res) ? res : (res?.data ?? []);
       const filteredData = applyLocalFilter(arr);
 
-      setAllRisalah(arr);
-      setRisalah(filteredData);
+      setAllUndangans(arr);
+      setUndangans(filteredData);
     } catch (err) {
-      console.error("Gagal ambil risalah:", err);
-      Alert.alert("Error", "Gagal memuat risalah. Silakan coba lagi.");
+      console.error("Gagal ambil undangan masuk:", err);
+      Alert.alert("Error", "Gagal memuat undangan masuk. Silakan coba lagi.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [approval, status, kodeBagian, applyLocalFilter]);
+  }, [status, kodeBagian, applyLocalFilter]);
 
   useEffect(() => {
     fetchKodeOptions();
   }, [fetchKodeOptions]);
 
   useEffect(() => {
-    fetchRisalah();
-  }, [fetchRisalah]);
+    fetchUndangans();
+  }, [fetchUndangans]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchRisalah();
-  }, [fetchRisalah]);
+    fetchUndangans();
+  }, [fetchUndangans]);
 
   const handleReset = () => {
     setStatus(approval === "1" ? "pending" : null);
     setKodeBagian(null);
   };
 
-  const totalDokumen = risalah.length;
-  const totalSemuaDokumen = allRisalah.length;
+  const totalDokumen = undangans.length;
+  const totalSemuaDokumen = allUndangans.length;
 
-  const approvedCount = risalah.filter(
+  const approvedCount = undangans.filter(
     (item) => item.status === "approve",
   ).length;
-  const pendingCount = risalah.filter(
+  const pendingCount = undangans.filter(
     (item) => item.status === "pending",
   ).length;
-  const correctionCount = risalah.filter(
+  const correctionCount = undangans.filter(
     (item) => item.status === "correction",
   ).length;
-  const rejectCount = risalah.filter((item) => item.status === "reject").length;
+  const rejectCount = undangans.filter(
+    (item) => item.status === "reject",
+  ).length;
 
   if (loading) {
     return (
@@ -313,14 +311,14 @@ export default function RisalahScreen() {
           <ActivityIndicator size="large" color={C.primary} />
 
           <Text style={[styles.loadingText, { color: C.textSecondary }]}>
-            Memuat risalah...
+            Memuat undangan masuk...
           </Text>
         </SafeAreaView>
       </>
     );
   }
 
-  const isEmpty = risalah.length === 0;
+  const isEmpty = undangans.length === 0;
 
   return (
     <>
@@ -328,8 +326,8 @@ export default function RisalahScreen() {
         <MemoFilterModal
           visible={modalVisible}
           onClose={() => setModalVisible(false)}
-          title="Filter Risalah"
-          subtitle="Saring risalah berdasarkan status dan kode bagian"
+          title="Filter Undangan Masuk"
+          subtitle="Saring undangan masuk berdasarkan status dan kode bagian"
           statusOptions={statusOptions}
           kodeOptions={kodeOptions}
           initialStatus={status}
@@ -356,7 +354,10 @@ export default function RisalahScreen() {
         <View
           style={[
             styles.header,
-            { backgroundColor: C.bg, borderBottomColor: C.border },
+            {
+              backgroundColor: C.bg,
+              borderBottomColor: C.border,
+            },
           ]}
         >
           <View style={styles.headerTop}>
@@ -375,11 +376,11 @@ export default function RisalahScreen() {
 
             <View style={styles.headerTitleWrap}>
               <Text style={[styles.headerTitle, { color: C.primary }]}>
-                Risalah Rapat
+                Undangan Masuk
               </Text>
 
               <Text style={[styles.headerSubtitle, { color: C.textSecondary }]}>
-                Daftar risalah rapat yang tersedia
+                Daftar undangan rapat yang diterima
               </Text>
             </View>
 
@@ -415,14 +416,18 @@ export default function RisalahScreen() {
               <View
                 style={[styles.headerInfoIcon, { backgroundColor: C.iconBg }]}
               >
-                <FontAwesome6 name="file-lines" size={18} color={C.primary} />
+                <FontAwesome6
+                  name="calendar-check"
+                  size={18}
+                  color={C.primary}
+                />
               </View>
 
               <View style={{ flex: 1 }}>
                 <Text
                   style={[styles.headerInfoLabel, { color: C.textPrimary }]}
                 >
-                  Total Risalah
+                  Total Undangan Masuk
                 </Text>
 
                 <Text
@@ -430,7 +435,7 @@ export default function RisalahScreen() {
                 >
                   {hasFilter
                     ? `Menampilkan ${totalDokumen} dari ${totalSemuaDokumen} dokumen`
-                    : "Semua risalah rapat yang tersedia"}
+                    : "Semua undangan masuk yang tersedia"}
                 </Text>
               </View>
             </View>
@@ -553,22 +558,20 @@ export default function RisalahScreen() {
                 style={[styles.emptyIconWrapper, { backgroundColor: C.iconBg }]}
               >
                 <Image
-                  source={require("@/assets/icons/risalah/risalah_fill_green.png")}
+                  source={require("@/assets/icons/undangan/undangan_fill_purple.png")}
                   style={styles.emptyIcon}
                   resizeMode="contain"
                 />
               </View>
 
               <Text style={[styles.emptyTitle, { color: C.textPrimary }]}>
-                Belum Ada Risalah
+                Belum Ada Undangan Masuk
               </Text>
 
               <Text style={[styles.emptyMessage, { color: C.textSecondary }]}>
-                {approval === "1"
-                  ? "Tidak ada risalah yang menunggu persetujuan Anda saat ini."
-                  : hasFilter
-                    ? "Tidak ada risalah yang sesuai dengan filter yang dipilih."
-                    : "Anda belum memiliki risalah rapat."}
+                {hasFilter
+                  ? "Tidak ada undangan masuk yang sesuai dengan filter yang dipilih."
+                  : "Anda belum memiliki undangan masuk."}
               </Text>
 
               {hasFilter && approval !== "1" && (
@@ -585,7 +588,7 @@ export default function RisalahScreen() {
               )}
             </View>
           ) : (
-            risalah.map((item) => {
+            undangans.map((item) => {
               const cfg = statusConfig[item.status] ?? statusConfig.pending;
 
               const tanggal = item.tgl_rapat
@@ -594,28 +597,27 @@ export default function RisalahScreen() {
                   ? formatTanggalID(item.tgl_dibuat)
                   : item.tgl_disahkan
                     ? formatTanggalID(item.tgl_disahkan)
-                    : item.created_at
-                      ? formatTanggalID(item.created_at)
-                      : item.updated_at
-                        ? formatTanggalID(item.updated_at)
-                        : "-";
+                    : item.updated_at
+                      ? formatTanggalID(item.updated_at)
+                      : "-";
 
               return (
                 <TouchableOpacity
-                  key={item.id_risalah}
+                  key={item.id_undangan}
                   activeOpacity={0.85}
                   onPress={() =>
                     router.push({
-                      pathname: "/risalah/risalah-detail" as any,
+                      pathname: "/undangan/undangan-detail" as any,
                       params: {
-                        id: String(item.id_risalah),
-                        source: "risalah",
-                        from: "risalah",
+                        id: String(item.id_undangan),
+                        jenis: "masuk",
+                        source: "undangan-masuk",
+                        from: "undangan-masuk",
                       },
                     })
                   }
                   style={[
-                    styles.risalahCard,
+                    styles.undanganCard,
                     {
                       backgroundColor: C.surface,
                       borderColor: C.border,
@@ -623,15 +625,15 @@ export default function RisalahScreen() {
                     C.shadow,
                   ]}
                 >
-                  <View style={styles.risalahCardHeader}>
+                  <View style={styles.undanganCardHeader}>
                     <View
                       style={[
-                        styles.risalahIconBox,
+                        styles.undanganIconBox,
                         { backgroundColor: C.iconBg },
                       ]}
                     >
                       <FontAwesome6
-                        name="file-lines"
+                        name="calendar-check"
                         size={16}
                         color={C.primary}
                       />
@@ -639,7 +641,7 @@ export default function RisalahScreen() {
 
                     <View style={{ flex: 1 }}>
                       <Text
-                        style={[styles.risalahTitle, { color: C.primary }]}
+                        style={[styles.undanganTitle, { color: C.primary }]}
                         numberOfLines={2}
                       >
                         {item.judul || "Tanpa Judul"}
@@ -647,7 +649,7 @@ export default function RisalahScreen() {
 
                       <Text
                         style={[
-                          styles.risalahNumber,
+                          styles.undanganNumber,
                           { color: C.textSecondary },
                         ]}
                         numberOfLines={1}
@@ -659,7 +661,7 @@ export default function RisalahScreen() {
 
                   <View
                     style={[
-                      styles.risalahMetaBox,
+                      styles.undanganMetaBox,
                       {
                         backgroundColor: C.surface2,
                         borderColor: C.borderSoft,
@@ -675,15 +677,14 @@ export default function RisalahScreen() {
                         }`,
                       ],
                       ["Tempat", item.tempat || "-"],
-                      ["Kode Bagian", getRisalahKode(item)],
-                      ["Bagian", getRisalahBagian(item)],
+                      ["Kode Bagian", getUndanganKode(item)],
+                      ["Bagian", getUndanganBagian(item)],
                       ["Tujuan", getTujuanText(item.tujuan_string)],
-                      ["Pembuat", item.nama_pembuat || "-"],
                     ].map(([label, value]) => (
-                      <View style={styles.risalahMetaRow} key={label}>
+                      <View style={styles.undanganMetaRow} key={label}>
                         <Text
                           style={[
-                            styles.risalahMetaLabel,
+                            styles.undanganMetaLabel,
                             { color: C.textSecondary },
                           ]}
                         >
@@ -692,7 +693,7 @@ export default function RisalahScreen() {
 
                         <Text
                           style={[
-                            styles.risalahMetaValue,
+                            styles.undanganMetaValue,
                             { color: C.textPrimary },
                           ]}
                           numberOfLines={1}
@@ -703,7 +704,7 @@ export default function RisalahScreen() {
                     ))}
                   </View>
 
-                  <View style={styles.risalahFooter}>
+                  <View style={styles.undanganFooter}>
                     <View
                       style={[
                         styles.statusBadge,
@@ -921,55 +922,55 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  risalahCard: {
+  undanganCard: {
     borderRadius: 22,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
   },
-  risalahCardHeader: {
+  undanganCardHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
     marginBottom: 14,
   },
-  risalahIconBox: {
+  undanganIconBox: {
     width: 42,
     height: 42,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  risalahTitle: {
+  undanganTitle: {
     fontSize: 15,
     fontWeight: "800",
     lineHeight: 21,
   },
-  risalahNumber: {
+  undanganNumber: {
     fontSize: 11,
     marginTop: 3,
   },
-  risalahMetaBox: {
+  undanganMetaBox: {
     borderRadius: 16,
     padding: 12,
     gap: 8,
     borderWidth: 1,
   },
-  risalahMetaRow: {
+  undanganMetaRow: {
     flexDirection: "row",
     alignItems: "center",
   },
-  risalahMetaLabel: {
+  undanganMetaLabel: {
     width: 95,
     fontSize: 11,
     fontWeight: "700",
   },
-  risalahMetaValue: {
+  undanganMetaValue: {
     flex: 1,
     fontSize: 11,
     fontWeight: "600",
   },
-  risalahFooter: {
+  undanganFooter: {
     marginTop: 14,
     flexDirection: "row",
     alignItems: "center",

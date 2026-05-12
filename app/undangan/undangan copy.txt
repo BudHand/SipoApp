@@ -1,540 +1,604 @@
+import { apiFetch } from "@/utils/api";
 import { FontAwesome6 } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState, } from "react";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
   RefreshControl,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import CustomModal from "../../components/filter-modal";
-import { ThemedText } from "../../components/themed-text";
-import { Colors } from "../../constants/colors";
-import { Fonts } from "../../constants/fonts";
-import { stylesIndex } from "../../constants/theme";
-import { apiFetch } from "../../utils/api";
-import { formatTanggalID } from "../../utils/date";
 
+// ─── Theme ────────────────────────────────────────────────────────────────────
 
-/* ============ Types ============ */
-type Status = "pending" | "correction" | "approve" | "reject";
-
-type Invitation = {
-  id: number;
-  title: string;
-  date: string; // hasil formatTanggalID
-  status: Status;
-  waktu_mulai?: string;
-  waktu_selesai?: string;
-  tempat?: string;
+const LIGHT = {
+  bg: "#F0F4FA",
+  surface: "#FFFFFF",
+  surface2: "#F5F8FD",
+  surface3: "#EBF0F8",
+  border: "rgba(100,140,200,0.13)",
+  borderStrong: "rgba(80,120,190,0.2)",
+  accent: "#1A6FD4",
+  accentBg: "rgba(26,111,212,0.07)",
+  accentBorder: "rgba(26,111,212,0.18)",
+  textPrimary: "#0D1829",
+  textSecondary: "#3A5070",
+  textTertiary: "#7A99BE",
+  textMuted: "#A8C0D8",
+  purple: "#6B3FA8",
+  purpleBg: "rgba(107,63,168,0.08)",
+  purpleBd: "rgba(107,63,168,0.2)",
+  purple2: "#8B5CC8",
+  purple2Bg: "rgba(139,92,200,0.08)",
+  purple2Bd: "rgba(139,92,200,0.2)",
+  cardIn: "#F4EEFF",
+  cardOut: "#F0EAFF",
+  orb1: "rgba(107,63,168,0.06)",
+  orb2: "rgba(139,92,200,0.04)",
+  shadowSm: {
+    shadowColor: "#3A1A8C",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  shadowMd: {
+    shadowColor: "#3A1A8C",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 5,
+  },
 };
 
-/* ============ Config Status Color ============ */
-const statusConfig: Record<
-  Status,
-  { label: string; color: string; soft: string }
-> = {
-  pending: { label: "Diproses", color: "#0B63F6", soft: "#D9E0EA" },
-  correction: { label: "Dikoreksi", color: "#B58100", soft: "#D9E0EA" },
-  approve: { label: "Diterima", color: "#118C4F", soft: "#D9E0EA" },
-  reject: { label: "Ditolak", color: "#C62E2E", soft: "#D9E0EA" },
+const DARK = {
+  bg: "#060B18",
+  surface: "#0C1220",
+  surface2: "#0F1828",
+  surface3: "#141E30",
+  border: "rgba(255,255,255,0.055)",
+  borderStrong: "rgba(255,255,255,0.1)",
+  accent: "#00D4FF",
+  accentBg: "rgba(0,212,255,0.08)",
+  accentBorder: "rgba(0,212,255,0.18)",
+  textPrimary: "rgba(255,255,255,0.90)",
+  textSecondary: "rgba(255,255,255,0.50)",
+  textTertiary: "rgba(255,255,255,0.28)",
+  textMuted: "rgba(255,255,255,0.15)",
+  purple: "#BB88FF",
+  purpleBg: "rgba(120,80,255,0.13)",
+  purpleBd: "rgba(120,80,255,0.25)",
+  purple2: "#D0AAFF",
+  purple2Bg: "rgba(187,136,255,0.13)",
+  purple2Bd: "rgba(187,136,255,0.25)",
+  cardIn: "#120A28",
+  cardOut: "#160E32",
+  orb1: "rgba(120,80,255,0.10)",
+  orb2: "rgba(187,136,255,0.06)",
+  shadowSm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  shadowMd: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
 };
 
-/* ============ Helpers ============ */
+type ThemeColors = typeof LIGHT;
 
-/* ============ Screen ============ */
-const UndanganScreen = () => {
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function UndanganIndex() {
   const router = useRouter();
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
-  const { approval } = useLocalSearchParams<{ approval?: string }>();
+
+  const [isDark, setIsDark] = useState(false);
+  const C: ThemeColors = isDark ? DARK : LIGHT;
+
+  const [countMasuk, setCountMasuk] = useState<number | null>(null);
+  const [countKeluar, setCountKeluar] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  /* ============ Screen ============ */
-  const [status, setStatus] = useState<string | null>(null);
-  const [divisi, setDivisi] = useState<string | null>(null);
-  const [openDropdown, setOpenDropdown] = useState<"status" | "divisi" | null>(
-    null
-  );
-
-  const [divisiOptions, setDivisiOptions] = useState<
-    { label: string; value: string }[]
-  >([]);
-
-  const statusOptions = [
-    { label: "Diproses", value: "pending" },
-    { label: "Dikoreksi", value: "correction" },
-    { label: "Diterima", value: "approve" },
-    { label: "Ditolak", value: "reject" },
-  ];
-
-  const handleReset = () => {
-    setStatus(null);
-    setDivisi(null);
-  };
-
-  const handleSelect = (type: "status" | "divisi", value: string) => {
-    if (type === "status") setStatus(value);
-    else setDivisi(value);
-    setOpenDropdown(null);
-  };
-
-  useEffect(() => {
-    const fetchDivisiOptions = async () => {
-      try {
-        const raw = await apiFetch("/undangans/kode"); // ← adjust the endpoint
-        const data = Array.isArray(raw) ? raw : raw.data;
-
-        const formatted = data.map((item: any) => ({
-          label: item, // or whatever your field name is
-          value: item,
-        }));
-
-        setDivisiOptions(formatted);
-      } catch (err) {
-        console.error("Failed to load divisi options:", err);
-      }
-    };
-
-    fetchDivisiOptions();
+  const loadCounts = useCallback(async () => {
+    try {
+      const [masukRes, keluarRes] = await Promise.all([
+        apiFetch("/undangans/masuk"),
+        apiFetch("/undangans/keluar"),
+      ]);
+      const masuk = masukRes?.data ?? masukRes;
+      const keluar = keluarRes?.data ?? keluarRes;
+      setCountMasuk(
+        Array.isArray(masuk) ? masuk.length : (masuk?.total ?? null),
+      );
+      setCountKeluar(
+        Array.isArray(keluar) ? keluar.length : (keluar?.total ?? null),
+      );
+    } catch {
+      // silent — count is optional
+    } finally {
+      setRefreshing(false);
+    }
   }, []);
 
-  const fetchInvitations = async () => {
-  try {
-    let url = "/undangans";
+  useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
 
-    if (approval === "1") {
-      url = "/undangans?status=pending";
-    } else {
-      const params = new URLSearchParams();
-      if (status) params.append("status", status);
-      if (divisi) params.append("kode", divisi);
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadCounts();
+  };
 
-      if ([...params].length > 0) {
-        url += `?${params.toString()}`;
-      }
-    }
-
-    const raw = await apiFetch(url);
-    const data = Array.isArray(raw) ? raw : raw.data;
-
-    const formatted: Invitation[] = data.map((item: any) => ({
-      id: item.id_undangan,
-      title: item.judul,
-      date: formatTanggalID(item.tgl_rapat),
-      status: item.status as Status,
-      waktu_mulai: item.waktu_mulai ?? "-",
-      waktu_selesai: item.waktu_selesai ?? "-",
-      tempat: item.tempat,
-    }));
-
-    setInvitations(formatted);
-  } catch (e) {
-    console.error("Error fetching invitations:", e);
-    Alert.alert("Gagal memuat undangan" + (e as string));
-  } finally {
-    setLoading(false);
-    setRefreshing(false);
-  }
-};
-
-useEffect(() => {
-  fetchInvitations();
-}, [status, divisi]);
-
-const onRefresh = async () => {
-  setRefreshing(true);
-  await fetchInvitations();
-};
-
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary ?? "#0B3B82"} />
-        <Text style={[Fonts.paragraphRegularSmall, styles.loadingText]}>
-          Sedang memuat undangan...
-        </Text>
-      </SafeAreaView>
-    );
-  }
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={[stylesIndex.container, { flex: 1, backgroundColor: Colors.white }]} edges={["top", "bottom"]}>
-      {/* Header */}
-      <View style={stylesIndex.header}>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Pressable
-            onPress={() => router.replace("/beranda/beranda")}
-            hitSlop={10}
-            style={{ padding: 8 }}
-            accessibilityRole="button"
-            accessibilityLabel="Kembali ke Beranda"
+    <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={["top"]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={C.bg}
+      />
+
+      {/* Orbs */}
+      <View
+        style={[s.orb1, { backgroundColor: C.orb1 }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[s.orb2, { backgroundColor: C.orb2 }]}
+        pointerEvents="none"
+      />
+
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+      <View style={[s.header, { borderBottomColor: C.border }]}>
+        <View style={s.headerLeft}>
+          {/* Back button */}
+          <TouchableOpacity
+            style={[
+              s.backBtn,
+              { backgroundColor: C.surface, borderColor: C.borderStrong },
+              C.shadowSm,
+            ]}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
           >
             <FontAwesome6
               name="chevron-left"
-              size={20}
-              color={Colors.textPrimary}
+              size={13}
+              color={C.textSecondary}
             />
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <ThemedText style={[Fonts.header1, { color: Colors.navy }]}>
-              Undangan Rapat
-            </ThemedText>
-            <ThemedText
-              style={[
-                Fonts.paragraphRegularLarge,
-                { color: Colors.textSecondary },
-              ]}
-            >
-              Daftar undangan rapat yang diterima
-            </ThemedText>
-          </View>
-          {approval !== "1" && (
-            <TouchableOpacity
-              onPress={() => setModalVisible(true)}
-              style={styles.filterBtn}
-            >
-              <FontAwesome6 name="sliders" size={22} color={Colors.navy} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-
-      {/* Modal (tetap) */}
-      <CustomModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-      >
-        <View>
-          {/* Tombol Close */}
-          <TouchableOpacity
-            style={{ position: "absolute", right: 0, padding: 4 }}
-            onPress={() => setModalVisible(false)}
-          >
-            <FontAwesome6 name="xmark" size={24} color={Colors.gray} />
           </TouchableOpacity>
 
-          <Text
+          <View
             style={[
-              Fonts.header5,
-              { marginBottom: 12, color: Colors.navy, textAlign: "center" },
+              s.headerIconWrap,
+              { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
             ]}
           >
-            FILTER
-          </Text>
-
-          {/* Dropdown Status */}
-          <Text style={[Fonts.paragraphMediumLarge, { color: Colors.navy }]}>
-            Status
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => {
-              setOpenDropdown(openDropdown === "status" ? null : "status");
-            }}
-            style={styles.dropdownButton}
-          >
-            <Text
-              style={[
-                Fonts.paragraphRegularLarge,
-                { color: status ? "#000" : "#777" },
-              ]}
-            >
-              {status
-                ? statusOptions.find((opt) => opt.value === status)?.label
-                : "Select Option"}
+            <FontAwesome6 name="calendar-check" size={16} color={C.purple} />
+          </View>
+          <View>
+            <Text style={[s.headerTitle, { color: C.textPrimary }]}>
+              Undangan
             </Text>
-            <FontAwesome6
-              name={openDropdown === "status" ? "chevron-up" : "chevron-down"}
-              size={16}
-              color="#777"
-            />
-          </TouchableOpacity>
-
-          {openDropdown === "status" && (
-            <View style={styles.dropdownList}>
-              {statusOptions.map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  onPress={() => handleSelect("status", opt.value)}
-                  style={styles.dropdownItem}
-                >
-                  <Text style={{ color: "#000" }}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Dropdown Divisi */}
-          <Text style={[Fonts.paragraphMediumLarge, { color: Colors.navy }]}>
-            Divisi
-          </Text>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => {
-              setOpenDropdown(openDropdown === "divisi" ? null : "divisi");
-            }}
-            style={styles.dropdownButton}
-          >
-            <Text
-              style={[
-                Fonts.paragraphRegularLarge,
-                { color: divisi ? "#000" : "#777" },
-              ]}
-            >
-              {divisi
-                ? divisiOptions.find((o) => o.value === divisi)?.label
-                : "Select Option"}
+            <Text style={[s.headerSub, { color: C.textTertiary }]}>
+              Jadwal & undangan rapat
             </Text>
-            <FontAwesome6
-              name={openDropdown === "divisi" ? "chevron-up" : "chevron-down"}
-              size={14}
-              color="#777"
-            />
-          </TouchableOpacity>
-
-          {openDropdown === "divisi" && (
-            <View style={styles.dropdownList}>
-              {divisiOptions.map((opt) => (
-                <TouchableOpacity
-                  key={opt.value}
-                  onPress={() => handleSelect("divisi", opt.value)}
-                  style={styles.dropdownItem}
-                >
-                  <Text style={{ color: "#000" }}>{opt.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Tombol bawah */}
-          <View style={styles.filterButtons}>
-            <TouchableOpacity
-              style={[styles.resetBtn, { backgroundColor: "#FA7268" }]}
-              onPress={handleReset}
-            >
-              <Text style={[Fonts.paragraphMediumLarge, styles.filterBtnText]}>Atur Ulang</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.applyBtn, { backgroundColor: "#1F316F" }]}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={[Fonts.paragraphMediumLarge, styles.filterBtnText]}>
-                Pakai
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
-      </CustomModal>
 
-      {/* List */}
-      <ScrollView 
-      contentContainerStyle={stylesIndex.list}
-      refreshControl={
-    <RefreshControl
-      refreshing={refreshing}
-      onRefresh={onRefresh}
-      colors={[Colors.primary]}
-    />
-  }
+        <TouchableOpacity
+          style={[
+            s.themeBtn,
+            { backgroundColor: C.surface, borderColor: C.borderStrong },
+            C.shadowSm,
+          ]}
+          onPress={() => setIsDark((v) => !v)}
+          activeOpacity={0.7}
+        >
+          <FontAwesome6
+            name={isDark ? "moon" : "sun"}
+            size={13}
+            color={C.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={s.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[C.purple]}
+            tintColor={C.purple}
+          />
+        }
       >
-        {invitations.map((item) => {
-          const cfg = statusConfig[item.status] ?? statusConfig.pending;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.85}
-              onPress={() =>
-                router.push(`/undangan/undangan-detail?id=${item.id}`)
-              }
-              style={[stylesIndex.card]}
-            >
-              {/* Judul */}
-              <ThemedText
-                style={[
-                  Fonts.paragraphMediumLarge,
-                  { marginBottom: 8, color: Colors.navy },
-                ]}
-              >
-                {item.title}
-              </ThemedText>
+        {/* ── INFO BANNER ──────────────────────────────────────────────────── */}
+        <View
+          style={[
+            s.banner,
+            { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+          ]}
+        >
+          <View style={[s.bannerDot, { backgroundColor: C.purple }]} />
+          <Text style={[s.bannerText, { color: C.purple }]}>
+            Pilih kategori undangan yang ingin ditampilkan
+          </Text>
+        </View>
 
-              {/* Hari/Tanggal */}
-              <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, Fonts.paragraphRegularSmall]}>
-                  Hari, Tanggal :
-                </Text>
-                <Text style={[styles.infoValue, Fonts.paragraphRegularSmall]}>
-                  {item.date || "-"}
-                </Text>
-              </View>
+        {/* ── UNDANGAN CARDS ───────────────────────────────────────────────── */}
+        <View style={s.cardsWrap}>
+          {/* Undangan Masuk */}
+          <TouchableOpacity
+            style={[
+              s.card,
+              { backgroundColor: C.cardIn, borderColor: C.borderStrong },
+              C.shadowMd,
+            ]}
+            activeOpacity={0.82}
+            onPress={() => router.push("/undangan/undangan-masuk" as any)}
+          >
+            <View style={[s.cardGlow, { backgroundColor: C.purpleBg }]} />
+            <View style={[s.cardStrip, { backgroundColor: C.purple }]} />
 
-              {/* Waktu (sebelahan) */}
-              <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, Fonts.paragraphRegularSmall]}>
-                  Waktu :
-                </Text>
+            <View style={s.cardBody}>
+              <View style={s.cardTopRow}>
                 <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <Text
-                    style={[
-                      { color: Colors.textSecondary },
-                      Fonts.paragraphRegularSmall,
-                    ]}
-                  >
-                    {item.waktu_mulai || "Mulai"}
-                  </Text>
-                  <Text
-                    style={[
-                      { color: Colors.textSecondary },
-                      Fonts.paragraphRegularSmall,
-                      { marginHorizontal: 4 },
-                    ]}
-                  >
-                    -
-                  </Text>
-                  <Text
-                    style={[
-                      { color: Colors.textSecondary },
-                      Fonts.paragraphRegularSmall,
-                    ]}
-                  >
-                    {item.waktu_selesai || "Selesai"}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Tempat */}
-              <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, Fonts.paragraphRegularSmall]}>
-                  Tempat :
-                </Text>
-                <Text style={[styles.infoValue, Fonts.paragraphRegularSmall]}>
-                  {item.tempat || "-"}
-                </Text>
-              </View>
-
-              {/* Status */}
-              <View style={styles.statusRow}>
-                <Text style={[styles.infoLabel, Fonts.paragraphRegularSmall]}>
-                  Status :
-                </Text>
-                <Text
                   style={[
-                    styles.statusValue,
-                    Fonts.paragraphMediumSmall,
-                    { color: cfg.color },
+                    s.cardIconWrap,
+                    { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
                   ]}
                 >
-                  {cfg.label}
-                </Text>
+                  <FontAwesome6
+                    name="calendar-plus"
+                    size={26}
+                    color={C.purple}
+                  />
+                </View>
+                {countMasuk !== null && (
+                  <View
+                    style={[
+                      s.countBadge,
+                      { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                    ]}
+                  >
+                    <View style={[s.countDot, { backgroundColor: C.purple }]} />
+                    <Text style={[s.countText, { color: C.purple }]}>
+                      {countMasuk} undangan
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              {/* Soft highlight bar sesuai status */}
-              <View style={[styles.softBg, { backgroundColor: cfg.soft }]} />
-            </TouchableOpacity>
-          );
-        })}
+              <Text style={[s.cardTitle, { color: C.textPrimary }]}>
+                Undangan Masuk
+              </Text>
+              <Text style={[s.cardDesc, { color: C.textTertiary }]}>
+                Undangan rapat yang diterima dan ditujukan kepada Anda
+              </Text>
+
+              <View
+                style={[s.cardDivider, { backgroundColor: C.borderStrong }]}
+              />
+
+              <View style={s.cardCta}>
+                <Text style={[s.cardCtaText, { color: C.purple }]}>
+                  Lihat Undangan Masuk
+                </Text>
+                <View
+                  style={[
+                    s.cardCtaArrow,
+                    { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                  ]}
+                >
+                  <FontAwesome6 name="arrow-right" size={11} color={C.purple} />
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Undangan Keluar */}
+          <TouchableOpacity
+            style={[
+              s.card,
+              { backgroundColor: C.cardOut, borderColor: C.borderStrong },
+              C.shadowMd,
+            ]}
+            activeOpacity={0.82}
+            onPress={() => router.push("/undangan/undangan-keluar" as any)}
+          >
+            <View style={[s.cardGlow, { backgroundColor: C.purple2Bg }]} />
+            <View style={[s.cardStrip, { backgroundColor: C.purple2 }]} />
+
+            <View style={s.cardBody}>
+              <View style={s.cardTopRow}>
+                <View
+                  style={[
+                    s.cardIconWrap,
+                    { backgroundColor: C.purple2Bg, borderColor: C.purple2Bd },
+                  ]}
+                >
+                  <FontAwesome6
+                    name="calendar-minus"
+                    size={26}
+                    color={C.purple2}
+                  />
+                </View>
+                {countKeluar !== null && (
+                  <View
+                    style={[
+                      s.countBadge,
+                      {
+                        backgroundColor: C.purple2Bg,
+                        borderColor: C.purple2Bd,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[s.countDot, { backgroundColor: C.purple2 }]}
+                    />
+                    <Text style={[s.countText, { color: C.purple2 }]}>
+                      {countKeluar} undangan
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={[s.cardTitle, { color: C.textPrimary }]}>
+                Undangan Keluar
+              </Text>
+              <Text style={[s.cardDesc, { color: C.textTertiary }]}>
+                Undangan rapat yang telah dikirimkan dari akun Anda
+              </Text>
+
+              <View
+                style={[s.cardDivider, { backgroundColor: C.borderStrong }]}
+              />
+
+              <View style={s.cardCta}>
+                <Text style={[s.cardCtaText, { color: C.purple2 }]}>
+                  Lihat Undangan Keluar
+                </Text>
+                <View
+                  style={[
+                    s.cardCtaArrow,
+                    { backgroundColor: C.purple2Bg, borderColor: C.purple2Bd },
+                  ]}
+                >
+                  <FontAwesome6
+                    name="arrow-right"
+                    size={11}
+                    color={C.purple2}
+                  />
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── QUICK INFO ───────────────────────────────────────────────────── */}
+        <View
+          style={[
+            s.infoCard,
+            { backgroundColor: C.surface, borderColor: C.borderStrong },
+            C.shadowSm,
+          ]}
+        >
+          <View style={[s.infoTopLine, { backgroundColor: C.purpleBd }]} />
+          <View style={s.infoRow}>
+            <View
+              style={[
+                s.infoIcon,
+                { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+              ]}
+            >
+              <FontAwesome6 name="circle-info" size={13} color={C.purple} />
+            </View>
+            <View style={s.infoContent}>
+              <Text style={[s.infoTitle, { color: C.textPrimary }]}>
+                Tentang Undangan
+              </Text>
+              <Text style={[s.infoDesc, { color: C.textTertiary }]}>
+                Undangan adalah surat resmi yang digunakan untuk mengundang
+                pegawai atau pejabat menghadiri kegiatan atau rapat dalam
+                lingkungan instansi.
+              </Text>
+            </View>
+          </View>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
-export default UndanganScreen;
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-/* ============ Local styles (layout kecil saja, font pakai Fonts) ============ */
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F7F8FA",
+const s = StyleSheet.create({
+  safe: { flex: 1 },
+
+  orb1: {
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    top: -90,
+    right: -80,
+    zIndex: 0,
   },
-  loadingText: {
-    marginTop: 8,
-    color: "#475569",
+  orb2: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    top: 240,
+    left: -70,
+    zIndex: 0,
   },
-  filterBtn: { padding: 8, marginLeft: 8 },
 
-  infoRow: {
+  header: {
     flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    borderBottomWidth: 0.5,
+    zIndex: 1,
+  },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
+  headerSub: {
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 2,
+    letterSpacing: 0.1,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  scrollContent: { padding: 16, paddingBottom: 110, gap: 14, zIndex: 1 },
+
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 0.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  bannerDot: { width: 7, height: 7, borderRadius: 4, flexShrink: 0 },
+  bannerText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.2, flex: 1 },
+
+  cardsWrap: { gap: 14 },
+
+  card: {
+    borderRadius: 20,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    position: "relative",
+  },
+  cardGlow: {
+    position: "absolute",
+    top: -40,
+    right: -40,
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+  },
+  cardStrip: { height: 3.5, width: "100%" },
+  cardBody: { padding: 20, gap: 6 },
+  cardTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 4,
   },
-  statusRow: {
-    flexDirection: "row",
-    marginTop: 4,
-  },
-  infoLabel: {
-    width: 100,
-    color: Colors.textSecondary,
-  },
-  infoValue: {
-    flex: 1,
-    color: Colors.textSecondary,
-  },
-  statusValue: {
-    flex: 1,
-    fontWeight: "700",
-  },
-  softBg: {
-    height: 6,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  dropdownButton: {
-    backgroundColor: "#F2F2F2",
-    borderRadius: 20,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginTop: 4,
-    marginBottom: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
+  cardIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    borderWidth: 0.5,
     alignItems: "center",
+    justifyContent: "center",
   },
-  dropdownList: {
-    backgroundColor: "#F9F9F9",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    marginBottom: 10,
-  },
-  dropdownItem: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
-  },
-  filterButtons: {
+  countBadge: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 0.5,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  countDot: { width: 6, height: 6, borderRadius: 3 },
+  countText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.2 },
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginTop: 6,
+  },
+  cardDesc: {
+    fontSize: 12,
+    fontWeight: "500",
+    lineHeight: 18,
+    letterSpacing: 0.1,
+  },
+  cardDivider: { height: 0.5, marginVertical: 12 },
+  cardCta: {
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 10,
   },
-  resetBtn: {
-    paddingVertical: 10,
-    borderRadius: 20,
-    width: "45%",
+  cardCtaText: { fontSize: 13, fontWeight: "700", letterSpacing: 0.1 },
+  cardCtaArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  applyBtn: {
-    paddingVertical: 10,
-    borderRadius: 20,
-    width: "45%",
+
+  infoCard: {
+    borderRadius: 16,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    position: "relative",
   },
-  filterBtnText: {
-    color: "white",
-    textAlign: "center",
+  infoTopLine: { position: "absolute", top: 0, left: 30, right: 30, height: 1 },
+  infoRow: { flexDirection: "row", gap: 12, padding: 14 },
+  infoIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    marginTop: 2,
+  },
+  infoContent: { flex: 1, gap: 4 },
+  infoTitle: { fontSize: 12.5, fontWeight: "700", letterSpacing: -0.1 },
+  infoDesc: {
+    fontSize: 11.5,
+    fontWeight: "500",
+    lineHeight: 17,
+    letterSpacing: 0.1,
   },
 });

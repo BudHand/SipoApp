@@ -1,0 +1,1553 @@
+// app/memo/memo-detail.tsx
+import CustomAlert from "@/components/CustomAlert";
+import DisposisiModal, { DisposisiTheme } from "@/components/DisposisiModal";
+import { apiFetch } from "@/utils/api";
+import { formatTanggalID } from "@/utils/date";
+import { FontAwesome6 } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Linking,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
+
+const LIGHT = {
+  bg: "#F0F4FA",
+  surface: "#FFFFFF",
+  surface2: "#F5F8FD",
+  surface3: "#EBF0F8",
+  border: "rgba(100,140,200,0.13)",
+  borderStrong: "rgba(80,120,190,0.2)",
+  accent: "#1A6FD4",
+  accent2: "#2A88F5",
+  accentBg: "rgba(26,111,212,0.07)",
+  accentBorder: "rgba(26,111,212,0.18)",
+  textPrimary: "#0D1829",
+  textSecondary: "#3A5070",
+  textTertiary: "#7A99BE",
+  textMuted: "#A8C0D8",
+  green: "#1A9E5A",
+  greenBg: "rgba(26,158,90,0.09)",
+  greenBd: "rgba(26,158,90,0.22)",
+  danger: "#D63050",
+  dangerBg: "rgba(214,48,80,0.08)",
+  dangerBd: "rgba(214,48,80,0.2)",
+  amber: "#C07010",
+  amberBg: "rgba(192,112,16,0.09)",
+  amberBd: "rgba(192,112,16,0.22)",
+  purple: "#6B3FA8",
+  purpleBg: "rgba(107,63,168,0.09)",
+  purpleBd: "rgba(107,63,168,0.22)",
+  orb1: "rgba(26,111,212,0.06)",
+  orb2: "rgba(42,136,245,0.04)",
+  panelTopLine: "rgba(26,111,212,0.25)",
+  shadowSm: {
+    shadowColor: "#1A3C8C",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  shadowMd: {
+    shadowColor: "#1A3C8C",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
+  },
+};
+
+const DARK = {
+  bg: "#060B18",
+  surface: "#0C1220",
+  surface2: "#0F1828",
+  surface3: "#141E30",
+  border: "rgba(255,255,255,0.055)",
+  borderStrong: "rgba(255,255,255,0.1)",
+  accent: "#00D4FF",
+  accent2: "#00AACC",
+  accentBg: "rgba(0,212,255,0.08)",
+  accentBorder: "rgba(0,212,255,0.18)",
+  textPrimary: "rgba(255,255,255,0.90)",
+  textSecondary: "rgba(255,255,255,0.50)",
+  textTertiary: "rgba(255,255,255,0.28)",
+  textMuted: "rgba(255,255,255,0.15)",
+  green: "#00FF94",
+  greenBg: "rgba(0,255,148,0.08)",
+  greenBd: "rgba(0,255,148,0.20)",
+  danger: "#FF4D6D",
+  dangerBg: "rgba(255,77,109,0.08)",
+  dangerBd: "rgba(255,77,109,0.20)",
+  amber: "#FFAA00",
+  amberBg: "rgba(255,170,0,0.08)",
+  amberBd: "rgba(255,170,0,0.20)",
+  purple: "#BB88FF",
+  purpleBg: "rgba(120,80,255,0.13)",
+  purpleBd: "rgba(120,80,255,0.25)",
+  orb1: "rgba(0,132,255,0.10)",
+  orb2: "rgba(0,255,198,0.06)",
+  panelTopLine: "rgba(0,212,255,0.28)",
+  shadowSm: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+  shadowMd: {
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+  },
+};
+
+type ThemeColors = typeof LIGHT;
+
+// ─── Types & Config ───────────────────────────────────────────────────────────
+
+type Status = "pending" | "correction" | "approve" | "reject";
+
+const STATUS_CONFIG: Record<
+  Status,
+  {
+    label: string;
+    icon: string;
+    getColors: (C: ThemeColors) => { c: string; bg: string; bd: string };
+  }
+> = {
+  approve: {
+    label: "Diterima",
+    icon: "circle-check",
+    getColors: (C) => ({ c: C.green, bg: C.greenBg, bd: C.greenBd }),
+  },
+  reject: {
+    label: "Ditolak",
+    icon: "circle-xmark",
+    getColors: (C) => ({ c: C.danger, bg: C.dangerBg, bd: C.dangerBd }),
+  },
+  correction: {
+    label: "Dikoreksi",
+    icon: "pen-to-square",
+    getColors: (C) => ({ c: C.amber, bg: C.amberBg, bd: C.amberBd }),
+  },
+  pending: {
+    label: "Diproses",
+    icon: "clock",
+    getColors: (C) => ({ c: C.accent, bg: C.accentBg, bd: C.accentBorder }),
+  },
+};
+
+const DISPOSISI_STATUS_MAP: Record<
+  string,
+  (C: ThemeColors) => { label: string; c: string; bg: string; bd: string }
+> = {
+  menunggu: (C) => ({
+    label: "Menunggu",
+    c: C.amber,
+    bg: C.amberBg,
+    bd: C.amberBd,
+  }),
+  diterima: (C) => ({
+    label: "Diterima",
+    c: C.accent,
+    bg: C.accentBg,
+    bd: C.accentBorder,
+  }),
+  diteruskan: (C) => ({
+    label: "Diteruskan",
+    c: C.purple,
+    bg: C.purpleBg,
+    bd: C.purpleBd,
+  }),
+  selesai: (C) => ({
+    label: "Selesai",
+    c: C.green,
+    bg: C.greenBg,
+    bd: C.greenBd,
+  }),
+};
+
+const TABBAR_HEIGHT = Platform.select({ ios: 49, android: 56, default: 56 })!;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function normalizeStatus(raw: any): Status {
+  const s = String(raw ?? "")
+    .toLowerCase()
+    .trim();
+  if (
+    [
+      "pending",
+      "diproses",
+      "process",
+      "processing",
+      "inprogress",
+      "0",
+    ].includes(s)
+  )
+    return "pending";
+  if (["approve", "approved", "diterima", "1"].includes(s)) return "approve";
+  if (["reject", "rejected", "ditolak", "2"].includes(s)) return "reject";
+  if (["correction", "dikoreksi", "3"].includes(s)) return "correction";
+  return "pending";
+}
+
+function getDisposisiStyle(status: string | undefined | null, C: ThemeColors) {
+  const key = String(status ?? "")
+    .trim()
+    .toLowerCase();
+  const fn = DISPOSISI_STATUS_MAP[key];
+  return fn
+    ? fn(C)
+    : {
+        label: status || "-",
+        c: C.textSecondary,
+        bg: C.surface2,
+        bd: C.borderStrong,
+      };
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function MemoDetail() {
+  const router = useRouter();
+  const { id, notif_id, jenis, source, from } = useLocalSearchParams();
+
+  const memoId = Array.isArray(id) ? id[0] : id;
+  const jenisMemo = Array.isArray(jenis) ? jenis[0] : jenis;
+  const sourceMemo = Array.isArray(source) ? source[0] : source;
+  const fromMemo = Array.isArray(from) ? from[0] : from;
+  const isMemoKeluar =
+    jenisMemo === "keluar" ||
+    sourceMemo === "memo-keluar" ||
+    fromMemo === "memo-keluar";
+
+  const insets = useSafeAreaInsets();
+
+  const [isDark, setIsDark] = useState(false);
+  const C: ThemeColors = isDark ? DARK : LIGHT;
+
+  // Map to DisposisiTheme for the component
+  const disposisiTheme: DisposisiTheme = {
+    surface: C.surface,
+    surface2: C.surface2,
+    border: C.border,
+    borderStrong: C.borderStrong,
+    accent: C.accent,
+    accentBg: C.accentBg,
+    accentBorder: C.accentBorder,
+    textPrimary: C.textPrimary,
+    textSecondary: C.textSecondary,
+    textTertiary: C.textTertiary,
+    textMuted: C.textMuted,
+    danger: C.danger,
+    panelTopLine: C.panelTopLine,
+  };
+
+  const [loading, setLoading] = useState(true);
+  const [detail, setDetail] = useState<any>(null);
+  const [role, setRole] = useState<string | null>(null);
+
+  // Approval state
+  const [showApprove, setShowApprove] = useState(false);
+  const [selectedStatus, setSelectedStatus] = useState<Status | null>(null);
+  const [catatan, setCatatan] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+
+  // PDF
+  const [loadingPDF, setLoadingPDF] = useState(false);
+
+  // Disposisi state
+  const [disposisiList, setDisposisiList] = useState<any[]>([]);
+  const [loadingDisposisi, setLoadingDisposisi] = useState(false);
+  const [showDisposisiModal, setShowDisposisiModal] = useState(false);
+  const [kandidatDisposisi, setKandidatDisposisi] = useState<
+    { id: number | string; nama: string }[]
+  >([]);
+  const [submittingDisposisi, setSubmittingDisposisi] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("role").then((r) => setRole(r));
+  }, []);
+
+  useEffect(() => {
+    async function fetchDetail() {
+      setLoading(true);
+      try {
+        if (notif_id) {
+          await apiFetch(`/notifikasi/${notif_id}/read`, {
+            method: "POST",
+          }).catch(() => {});
+        }
+        const raw = await apiFetch(`/memos/${memoId}`);
+        setDetail(raw?.data ?? raw);
+      } catch (error) {
+        Alert.alert("Error", "Gagal memuat detail memo: " + error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (memoId) fetchDetail();
+  }, [memoId, notif_id]);
+
+  useEffect(() => {
+    if (memoId) fetchDisposisiMemo();
+  }, [memoId]);
+
+  async function fetchDisposisiMemo() {
+    if (!memoId) return;
+    try {
+      setLoadingDisposisi(true);
+      const res = await apiFetch("/disposisi?per_page=100");
+      const masuk = res?.data?.masuk?.data ?? [];
+      const keluar = res?.data?.keluar?.data ?? [];
+      const merged = [...masuk, ...keluar];
+      const related = merged.filter((item: any) => {
+        const type =
+          item.document_type ?? item.tipe_document ?? item.dokumen?.tipe;
+        const docId = item.document_id ?? item.id_document ?? item.dokumen?.id;
+        return String(type) === "memo" && String(docId) === String(memoId);
+      });
+      setDisposisiList(related);
+    } catch {
+      setDisposisiList([]);
+    } finally {
+      setLoadingDisposisi(false);
+    }
+  }
+
+  const loadPDF = async () => {
+    const documentId = detail?.id_memo ?? detail?.id ?? memoId;
+    if (!documentId) {
+      Alert.alert("Error", "ID memo tidak ditemukan.");
+      return;
+    }
+    try {
+      setLoadingPDF(true);
+      const res = await apiFetch(`/memos/${documentId}/pdf`);
+      const url =
+        res?.data?.url ??
+        res?.data?.file_url ??
+        res?.url ??
+        res?.file_url ??
+        res?.pdf_url;
+      if (!url) {
+        Alert.alert("Error", res?.message || "URL PDF memo tidak tersedia.");
+        return;
+      }
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert("Error", "Tidak dapat membuka PDF memo.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Gagal membuka PDF memo.");
+    } finally {
+      setLoadingPDF(false);
+    }
+  };
+
+  async function openDisposisiModal() {
+    const documentId = detail?.id_memo ?? detail?.id ?? memoId;
+    if (!documentId) {
+      Alert.alert("Error", "ID memo tidak ditemukan.");
+      return;
+    }
+    try {
+      setSubmittingDisposisi(true);
+      const res = await apiFetch(
+        `/disposisi/kandidat-penerima?document_type=memo&document_id=${documentId}`,
+      );
+      if (!res?.status) {
+        Alert.alert(
+          "Tidak bisa membuat disposisi",
+          res?.message || "Gagal mengambil kandidat.",
+        );
+        return;
+      }
+      const kandidat: { id: number | string; nama: string }[] = Array.isArray(
+        res.data,
+      )
+        ? res.data.map((u: any) => ({ id: u.id, nama: u.nama }))
+        : [];
+      setKandidatDisposisi(kandidat);
+      setShowDisposisiModal(true);
+      if (kandidat.length === 0)
+        Alert.alert("Info", "Tidak ada kandidat penerima disposisi.");
+    } catch (error: any) {
+      Alert.alert(
+        "Tidak bisa membuat disposisi",
+        error?.message || "Gagal mengambil kandidat.",
+      );
+    } finally {
+      setSubmittingDisposisi(false);
+    }
+  }
+
+  async function handleDisposisiSubmit(payload: {
+    selectedUsers: Array<number | string>;
+    instruksi: string;
+    catatan: string;
+    deadline: string;
+  }) {
+    const documentId = detail?.id_memo ?? detail?.id ?? memoId;
+    if (!documentId) {
+      Alert.alert("Error", "ID memo tidak ditemukan.");
+      return;
+    }
+    if (payload.selectedUsers.length === 0) {
+      Alert.alert("Validasi", "Pilih minimal satu penerima disposisi.");
+      return;
+    }
+    if (!payload.instruksi.trim()) {
+      Alert.alert("Validasi", "Instruksi disposisi wajib diisi.");
+      return;
+    }
+    try {
+      setSubmittingDisposisi(true);
+      const body: Record<string, any> = {
+        document_type: "memo",
+        document_id: Number(documentId),
+        kepada_user_id: payload.selectedUsers.map((u) => Number(u)),
+        instruksi: payload.instruksi.trim(),
+        catatan: payload.catatan.trim() || null,
+      };
+      if (payload.deadline.trim()) body.deadline = payload.deadline.trim();
+      const res = await apiFetch("/disposisi", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      if (!res?.status) {
+        Alert.alert("Error", res?.message || "Gagal membuat disposisi.");
+        return;
+      }
+      Alert.alert("Berhasil", res?.message || "Disposisi berhasil dibuat.");
+      setShowDisposisiModal(false);
+      await fetchDisposisiMemo();
+    } catch (error: any) {
+      Alert.alert("Error", error?.message || "Gagal membuat disposisi.");
+    } finally {
+      setSubmittingDisposisi(false);
+    }
+  }
+
+  const statusNow: Status = normalizeStatus(
+    detail?.status ?? detail?.status_approval,
+  );
+  const statusCfg = STATUS_CONFIG[statusNow];
+  const statusColors = statusCfg.getColors(C);
+
+  const isNoteRequired =
+    selectedStatus === "reject" || selectedStatus === "correction";
+  const isSaveDisabled = !selectedStatus || (isNoteRequired && !catatan.trim());
+
+  async function submitApproval() {
+    if (isSaveDisabled) return;
+    try {
+      setSubmitting(true);
+      await apiFetch(`/memos/${memoId}/update-status?_method=PUT`, {
+        method: "POST",
+        body: JSON.stringify({
+          status: selectedStatus,
+          catatan: isNoteRequired ? catatan.trim() : null,
+        }),
+      });
+      setDetail((prev: any) => ({ ...prev, status: selectedStatus }));
+      setShowApprove(false);
+      setSelectedStatus(null);
+      setCatatan("");
+      setShowAlert(true);
+    } catch (e: any) {
+      Alert.alert("Gagal", e?.message ?? "Gagal mengirim persetujuan.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const bottomOffset = insets.bottom + TABBAR_HEIGHT + 8;
+
+  // ─── Loading ────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <SafeAreaView
+        style={[s.loadingWrap, { backgroundColor: LIGHT.bg }]}
+        edges={["top"]}
+      >
+        <View
+          style={[
+            s.loadingIcon,
+            {
+              backgroundColor: LIGHT.accentBg,
+              borderColor: LIGHT.accentBorder,
+            },
+          ]}
+        >
+          <ActivityIndicator size="large" color={LIGHT.accent} />
+        </View>
+        <Text style={[s.loadingText, { color: LIGHT.textTertiary }]}>
+          Sedang memuat memo...
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
+  return (
+    <SafeAreaView style={[s.safe, { backgroundColor: C.bg }]} edges={["top"]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={C.bg}
+      />
+
+      {/* Orbs */}
+      <View
+        style={[s.orb1, { backgroundColor: C.orb1 }]}
+        pointerEvents="none"
+      />
+      <View
+        style={[s.orb2, { backgroundColor: C.orb2 }]}
+        pointerEvents="none"
+      />
+
+      {/* ── HEADER ─────────────────────────────────────────────────────────── */}
+      <View style={[s.header, { borderBottomColor: C.border }]}>
+        <View style={s.headerLeft}>
+          <TouchableOpacity
+            style={[
+              s.hBtn,
+              { backgroundColor: C.surface, borderColor: C.borderStrong },
+              C.shadowSm,
+            ]}
+            onPress={() => router.back()}
+            activeOpacity={0.7}
+          >
+            <FontAwesome6
+              name="chevron-left"
+              size={13}
+              color={C.textSecondary}
+            />
+          </TouchableOpacity>
+
+          <View
+            style={[
+              s.headerIconWrap,
+              { backgroundColor: C.accentBg, borderColor: C.accentBorder },
+            ]}
+          >
+            <FontAwesome6 name="envelope" size={16} color={C.accent} />
+          </View>
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
+              style={[s.headerTitle, { color: C.textPrimary }]}
+              numberOfLines={1}
+            >
+              Detail Memo
+            </Text>
+            <Text style={[s.headerSub, { color: C.textTertiary }]}>
+              {isMemoKeluar ? "Memo Keluar" : "Memo Masuk"}
+            </Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            s.hBtn,
+            { backgroundColor: C.surface, borderColor: C.borderStrong },
+            C.shadowSm,
+          ]}
+          onPress={() => setIsDark((v) => !v)}
+          activeOpacity={0.7}
+        >
+          <FontAwesome6
+            name={isDark ? "moon" : "sun"}
+            size={13}
+            color={C.textSecondary}
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── SCROLL CONTENT ─────────────────────────────────────────────────── */}
+      <ScrollView
+        contentContainerStyle={[
+          s.scrollContent,
+          { paddingBottom: 24 + bottomOffset + 64 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <CustomAlert
+          visible={showAlert}
+          onClose={() => setShowAlert(false)}
+          title="Berhasil"
+          message="Persetujuan berhasil dikirim."
+        />
+
+        {/* ── IDENTITY CARD ──────────────────────────────────────────────────── */}
+        <View
+          style={[
+            s.identityCard,
+            { backgroundColor: C.surface, borderColor: C.borderStrong },
+            C.shadowMd,
+          ]}
+        >
+          <View style={[s.cardTopLine, { backgroundColor: C.panelTopLine }]} />
+
+          {/* Status strip */}
+          <View
+            style={[
+              s.statusStrip,
+              {
+                backgroundColor: statusColors.bg,
+                borderBottomColor: statusColors.bd,
+              },
+            ]}
+          >
+            <View
+              style={[
+                s.statusIconWrap,
+                {
+                  backgroundColor: statusColors.bg,
+                  borderColor: statusColors.bd,
+                },
+              ]}
+            >
+              <FontAwesome6
+                name={statusCfg.icon as any}
+                size={13}
+                color={statusColors.c}
+              />
+            </View>
+            <Text style={[s.statusLabel, { color: statusColors.c }]}>
+              {statusCfg.label}
+            </Text>
+            <View style={{ flex: 1 }} />
+            <Text style={[s.nomorMemo, { color: C.textTertiary }]}>
+              {detail?.nomor_memo ?? detail?.no_memo ?? "-"}
+            </Text>
+          </View>
+
+          <View style={s.identityBody}>
+            {/* Title */}
+            <Text style={[s.memoTitle, { color: C.textPrimary }]}>
+              {detail?.judul ?? detail?.title ?? "Detail Memo"}
+            </Text>
+
+            {/* Action buttons */}
+            <View style={s.actionRow}>
+              <TouchableOpacity
+                style={[
+                  s.actionBtn,
+                  {
+                    backgroundColor: "#D63050",
+                    borderColor: "rgba(214,48,80,0.3)",
+                  },
+                  loadingPDF && { opacity: 0.55 },
+                ]}
+                onPress={loadPDF}
+                disabled={loadingPDF}
+                activeOpacity={0.8}
+              >
+                {loadingPDF ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <>
+                    <FontAwesome6 name="file-pdf" size={13} color="#fff" />
+                    <Text style={s.actionBtnText}>Lihat PDF</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {!isMemoKeluar && (
+                <TouchableOpacity
+                  style={[
+                    s.actionBtn,
+                    { backgroundColor: C.accent, borderColor: C.accentBorder },
+                    submittingDisposisi && { opacity: 0.55 },
+                  ]}
+                  onPress={openDisposisiModal}
+                  disabled={submittingDisposisi}
+                  activeOpacity={0.8}
+                >
+                  {submittingDisposisi ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <FontAwesome6 name="paper-plane" size={13} color="#fff" />
+                      <Text style={s.actionBtnText}>Buat Disposisi</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Divider */}
+            <View style={[s.divider, { backgroundColor: C.border }]} />
+
+            {/* Meta rows */}
+            <View style={s.metaGrid}>
+              {[
+                {
+                  icon: "user",
+                  label: "Pembuat",
+                  value:
+                    detail?.nama_pembuat ??
+                    detail?.pembuat ??
+                    detail?.kode ??
+                    "-",
+                },
+                {
+                  icon: "calendar",
+                  label: "Tanggal",
+                  value: formatTanggalID(
+                    detail?.tgl_dibuat ?? detail?.created_at,
+                  ),
+                },
+                {
+                  icon: "building",
+                  label: "Bagian",
+                  value: detail?.nama_bagian ?? detail?.kode_bagian ?? "-",
+                },
+                ...(!Array.isArray(detail?.tujuan_string)
+                  ? [
+                      {
+                        icon: "paper-plane",
+                        label: "Tujuan",
+                        value:
+                          typeof detail?.tujuan_string === "string"
+                            ? detail.tujuan_string
+                            : "-",
+                      },
+                    ]
+                  : []),
+              ].map((row) => (
+                <View key={row.label} style={s.metaRow}>
+                  <View
+                    style={[s.metaIconWrap, { backgroundColor: C.accentBg }]}
+                  >
+                    <FontAwesome6
+                      name={row.icon as any}
+                      size={10}
+                      color={C.accent}
+                    />
+                  </View>
+                  <Text style={[s.metaLabel, { color: C.textTertiary }]}>
+                    {row.label}
+                  </Text>
+                  <Text
+                    style={[s.metaValue, { color: C.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {row.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Tujuan list (multiple) */}
+            {Array.isArray(detail?.tujuan_string) &&
+              detail.tujuan_string.length > 0 && (
+                <View
+                  style={[
+                    s.tujuanWrap,
+                    { backgroundColor: C.surface2, borderColor: C.border },
+                  ]}
+                >
+                  <View style={s.tujuanHeaderRow}>
+                    <View
+                      style={[s.metaIconWrap, { backgroundColor: C.accentBg }]}
+                    >
+                      <FontAwesome6
+                        name="paper-plane"
+                        size={10}
+                        color={C.accent}
+                      />
+                    </View>
+                    <Text
+                      style={[s.tujuanHeaderText, { color: C.textTertiary }]}
+                    >
+                      Ditujukan kepada
+                    </Text>
+                  </View>
+                  {detail.tujuan_string.map((t: string, idx: number) => (
+                    <View key={idx} style={s.tujuanItem}>
+                      <View
+                        style={[s.tujuanBullet, { backgroundColor: C.accent }]}
+                      />
+                      <Text style={[s.tujuanText, { color: C.textPrimary }]}>
+                        {t}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+            {/* Divider */}
+            <View style={[s.divider, { backgroundColor: C.border }]} />
+          </View>
+        </View>
+
+        {/* ── DISPOSISI PANEL ──────────────────────────────────────────────── */}
+        {(loadingDisposisi || disposisiList.length > 0) && (
+          <View
+            style={[
+              s.panel,
+              { backgroundColor: C.surface, borderColor: C.borderStrong },
+              C.shadowSm,
+            ]}
+          >
+            <View
+              style={[s.panelTopLine, { backgroundColor: C.panelTopLine }]}
+            />
+
+            <View style={s.panelHeader}>
+              <View style={s.panelHeaderLeft}>
+                <View
+                  style={[
+                    s.panelIcon,
+                    { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                  ]}
+                >
+                  <FontAwesome6 name="paper-plane" size={12} color={C.purple} />
+                </View>
+                <View>
+                  <Text style={[s.panelTitle, { color: C.textPrimary }]}>
+                    Informasi Disposisi
+                  </Text>
+                  <Text style={[s.panelSub, { color: C.textTertiary }]}>
+                    Riwayat disposisi memo ini
+                  </Text>
+                </View>
+              </View>
+
+              {loadingDisposisi ? (
+                <ActivityIndicator size="small" color={C.purple} />
+              ) : (
+                <View
+                  style={[
+                    s.countBadge,
+                    { backgroundColor: C.purpleBg, borderColor: C.purpleBd },
+                  ]}
+                >
+                  <Text style={[s.countBadgeText, { color: C.purple }]}>
+                    {disposisiList.length}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {loadingDisposisi ? (
+              <View style={s.emptyWrap}>
+                <Text style={[s.emptyText, { color: C.textTertiary }]}>
+                  Memuat informasi disposisi...
+                </Text>
+              </View>
+            ) : (
+              disposisiList.map((item: any, index: number) => {
+                const dStyle = getDisposisiStyle(item.status, C);
+                return (
+                  <TouchableOpacity
+                    key={`${item.id}-${index}`}
+                    style={[
+                      s.disposisiItem,
+                      index > 0 && {
+                        borderTopWidth: 0.5,
+                        borderTopColor: C.border,
+                      },
+                    ]}
+                    activeOpacity={0.8}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/disposisi/disposisi-detail" as any,
+                        params: { id: String(item.id) },
+                      })
+                    }
+                  >
+                    <View
+                      style={[
+                        s.disposisiIcon,
+                        {
+                          backgroundColor: C.purpleBg,
+                          borderColor: C.purpleBd,
+                        },
+                      ]}
+                    >
+                      <FontAwesome6
+                        name="paper-plane"
+                        size={13}
+                        color={C.purple}
+                      />
+                    </View>
+
+                    <View style={s.disposisiContent}>
+                      <Text
+                        style={[s.disposisiInstruksi, { color: C.textPrimary }]}
+                        numberOfLines={2}
+                      >
+                        {item.instruksi ?? "Disposisi"}
+                      </Text>
+                      <Text
+                        style={[s.disposisiDate, { color: C.textTertiary }]}
+                      >
+                        {formatTanggalID(item.updated_at ?? item.created_at)}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        s.disposisiStatusBadge,
+                        { backgroundColor: dStyle.bg, borderColor: dStyle.bd },
+                      ]}
+                    >
+                      <Text
+                        style={[s.disposisiStatusText, { color: dStyle.c }]}
+                      >
+                        {dStyle.label}
+                      </Text>
+                    </View>
+
+                    <FontAwesome6
+                      name="chevron-right"
+                      size={10}
+                      color={C.textMuted}
+                      style={{ marginLeft: 6 }}
+                    />
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ── APPROVAL FLOATING BUTTON ───────────────────────────────────────── */}
+      {statusNow === "pending" && role === "3" && (
+        <View style={[s.bottomBar, { bottom: bottomOffset }]}>
+          <TouchableOpacity
+            style={[
+              s.approveBtn,
+              { backgroundColor: C.accent, borderColor: C.accentBorder },
+            ]}
+            onPress={() => setShowApprove(true)}
+            activeOpacity={0.85}
+          >
+            <FontAwesome6 name="shield-halved" size={15} color="#fff" />
+            <Text style={s.approveBtnText}>Persetujuan Memo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── DISPOSISI MODAL (component) ────────────────────────────────────── */}
+      <DisposisiModal
+        visible={showDisposisiModal}
+        onClose={() => setShowDisposisiModal(false)}
+        onSubmit={handleDisposisiSubmit}
+        kandidat={kandidatDisposisi}
+        submitting={submittingDisposisi}
+        C={disposisiTheme}
+      />
+
+      {/* ── APPROVAL MODAL ─────────────────────────────────────────────────── */}
+      <Modal
+        visible={showApprove}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowApprove(false)}
+      >
+        <Pressable
+          style={s.modalBackdrop}
+          onPress={() => {
+            setShowApprove(false);
+            setShowOptions(false);
+          }}
+        />
+
+        <View
+          style={[
+            s.approvalModal,
+            { backgroundColor: C.surface, borderColor: C.borderStrong },
+            C.shadowMd,
+          ]}
+        >
+          <View style={[s.cardTopLine, { backgroundColor: C.panelTopLine }]} />
+
+          {/* Modal header */}
+          <View style={s.approvalModalHeader}>
+            <View
+              style={[
+                s.panelIcon,
+                { backgroundColor: C.accentBg, borderColor: C.accentBorder },
+              ]}
+            >
+              <FontAwesome6 name="shield-halved" size={13} color={C.accent} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.approvalTitle, { color: C.textPrimary }]}>
+                Persetujuan Memo
+              </Text>
+              <Text style={[s.approvalSub, { color: C.textTertiary }]}>
+                Pilih keputusan persetujuan
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                s.hBtn,
+                { backgroundColor: C.surface2, borderColor: C.borderStrong },
+              ]}
+              onPress={() => {
+                setShowApprove(false);
+                setShowOptions(false);
+              }}
+            >
+              <FontAwesome6 name="xmark" size={13} color={C.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Status picker */}
+          <Text style={[s.modalLabel, { color: C.textTertiary }]}>
+            Status Keputusan
+          </Text>
+          <TouchableOpacity
+            style={[
+              s.selectBox,
+              { backgroundColor: C.surface2, borderColor: C.borderStrong },
+            ]}
+            onPress={() => setShowOptions((v) => !v)}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                s.selectBoxText,
+                { color: selectedStatus ? C.textPrimary : C.textMuted },
+              ]}
+            >
+              {selectedStatus
+                ? STATUS_CONFIG[selectedStatus].label
+                : "Pilih keputusan..."}
+            </Text>
+            <FontAwesome6
+              name={showOptions ? "chevron-up" : "chevron-down"}
+              size={11}
+              color={C.textTertiary}
+            />
+          </TouchableOpacity>
+
+          {showOptions && (
+            <View
+              style={[
+                s.dropdown,
+                { backgroundColor: C.surface, borderColor: C.borderStrong },
+              ]}
+            >
+              {(["approve", "reject", "correction"] as Status[]).map(
+                (value, idx) => {
+                  const cfg = STATUS_CONFIG[value];
+                  const sc = cfg.getColors(C);
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      style={[
+                        s.dropdownItem,
+                        idx > 0 && {
+                          borderTopWidth: 0.5,
+                          borderTopColor: C.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        setSelectedStatus(value);
+                        setShowOptions(false);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View
+                        style={[
+                          s.dropdownIconWrap,
+                          { backgroundColor: sc.bg, borderColor: sc.bd },
+                        ]}
+                      >
+                        <FontAwesome6
+                          name={cfg.icon as any}
+                          size={11}
+                          color={sc.c}
+                        />
+                      </View>
+                      <Text
+                        style={[s.dropdownItemText, { color: C.textPrimary }]}
+                      >
+                        {cfg.label}
+                      </Text>
+                      {selectedStatus === value && (
+                        <FontAwesome6 name="check" size={11} color={C.accent} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                },
+              )}
+            </View>
+          )}
+
+          {/* Catatan (if reject / correction) */}
+          {isNoteRequired && (
+            <>
+              <Text
+                style={[s.modalLabel, { color: C.textTertiary, marginTop: 12 }]}
+              >
+                Catatan <Text style={{ color: C.danger }}>*</Text>
+              </Text>
+              <TextInput
+                placeholder="Catatan wajib diisi untuk keputusan ini..."
+                placeholderTextColor={C.textMuted}
+                value={catatan}
+                onChangeText={setCatatan}
+                multiline
+                style={[
+                  s.noteInput,
+                  {
+                    backgroundColor: C.surface2,
+                    borderColor: C.borderStrong,
+                    color: C.textPrimary,
+                  },
+                ]}
+              />
+            </>
+          )}
+
+          {/* Submit */}
+          <TouchableOpacity
+            style={[
+              s.submitBtn,
+              {
+                backgroundColor: C.accent,
+                opacity: isSaveDisabled || submitting ? 0.45 : 1,
+              },
+            ]}
+            disabled={isSaveDisabled || submitting}
+            onPress={submitApproval}
+            activeOpacity={0.85}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <FontAwesome6 name="check" size={13} color="#fff" />
+                <Text style={s.submitBtnText}>Simpan Keputusan</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  safe: { flex: 1 },
+
+  loadingWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 14,
+  },
+  loadingIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: { fontSize: 13, fontWeight: "600" },
+
+  orb1: {
+    position: "absolute",
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    top: -90,
+    right: -90,
+  },
+  orb2: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    top: 260,
+    left: -70,
+  },
+
+  // ── Header ─────────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 16,
+    borderBottomWidth: 0.5,
+    zIndex: 1,
+  },
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+    minWidth: 0,
+  },
+  headerIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
+  headerSub: { fontSize: 11, fontWeight: "500", marginTop: 2 },
+  hBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+
+  scrollContent: { padding: 16, gap: 14, zIndex: 1 },
+
+  // ── Identity card ──────────────────────────────────────────────────────────
+  identityCard: {
+    borderRadius: 20,
+    borderWidth: 0.5,
+    overflow: "hidden",
+  },
+  cardTopLine: {
+    position: "absolute",
+    top: 0,
+    left: 40,
+    right: 40,
+    height: 1,
+  },
+
+  statusStrip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+  },
+  statusIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusLabel: { fontSize: 12, fontWeight: "800", letterSpacing: 0.2 },
+  nomorMemo: { fontSize: 10, fontWeight: "600", letterSpacing: 0.2 },
+
+  identityBody: { padding: 16, gap: 0 },
+  memoTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    marginBottom: 14,
+    lineHeight: 25,
+  },
+  divider: { height: 0.5, marginBottom: 14 },
+
+  metaGrid: { gap: 10, marginBottom: 14 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  metaIconWrap: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  metaLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    width: 70,
+    letterSpacing: 0.1,
+  },
+  metaValue: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: -0.1,
+  },
+
+  tujuanWrap: {
+    borderRadius: 12,
+    borderWidth: 0.5,
+    padding: 12,
+    gap: 8,
+    marginBottom: 14,
+  },
+  tujuanHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 4,
+  },
+  tujuanHeaderText: { fontSize: 11, fontWeight: "600" },
+  tujuanItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  tujuanBullet: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    marginTop: 6,
+    flexShrink: 0,
+  },
+  tujuanText: {
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+    lineHeight: 18,
+  },
+
+  actionRow: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  actionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 0.5,
+  },
+  actionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#fff",
+  },
+
+  // ── Disposisi panel ────────────────────────────────────────────────────────
+  panel: {
+    borderRadius: 18,
+    borderWidth: 0.5,
+    padding: 14,
+    overflow: "hidden",
+    position: "relative",
+  },
+  panelTopLine: {
+    position: "absolute",
+    top: 0,
+    left: 40,
+    right: 40,
+    height: 1,
+  },
+  panelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  panelHeaderLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  panelIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  panelTitle: { fontSize: 13, fontWeight: "800", letterSpacing: -0.2 },
+  panelSub: { fontSize: 10, fontWeight: "500", marginTop: 1 },
+  countBadge: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: 10,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  countBadgeText: { fontSize: 13, fontWeight: "800" },
+
+  emptyWrap: { paddingVertical: 16, alignItems: "center" },
+  emptyText: { fontSize: 12, fontWeight: "500" },
+
+  disposisiItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 10,
+  },
+  disposisiIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  disposisiContent: { flex: 1, minWidth: 0, gap: 3 },
+  disposisiInstruksi: {
+    fontSize: 12.5,
+    fontWeight: "700",
+    letterSpacing: -0.1,
+  },
+  disposisiDate: { fontSize: 10, fontWeight: "500" },
+  disposisiStatusBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderWidth: 0.5,
+    flexShrink: 0,
+  },
+  disposisiStatusText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.2 },
+
+  // ── Bottom bar ─────────────────────────────────────────────────────────────
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    zIndex: 20,
+  },
+  approveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: 28,
+    borderWidth: 0.5,
+  },
+  approveBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.2,
+  },
+
+  // ── Approval modal ─────────────────────────────────────────────────────────
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(10,20,50,0.45)",
+  },
+  approvalModal: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    top: "18%",
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 0.5,
+    overflow: "hidden",
+  },
+  approvalModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 16,
+  },
+  approvalTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+  },
+  approvalSub: { fontSize: 10, fontWeight: "500", marginTop: 1 },
+
+  modalLabel: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    textTransform: "uppercase",
+  },
+  selectBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 13,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    marginBottom: 8,
+  },
+  selectBoxText: { fontSize: 13, fontWeight: "600" },
+  dropdown: {
+    borderRadius: 14,
+    borderWidth: 0.5,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  dropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  dropdownIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 0.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  dropdownItemText: { fontSize: 13, fontWeight: "600", flex: 1 },
+
+  noteInput: {
+    borderRadius: 14,
+    borderWidth: 0.5,
+    padding: 12,
+    minHeight: 80,
+    textAlignVertical: "top",
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  submitBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  submitBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#fff",
+    letterSpacing: -0.1,
+  },
+});
