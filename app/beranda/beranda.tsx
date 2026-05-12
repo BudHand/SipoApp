@@ -467,7 +467,7 @@ export default function BerandaScreen() {
                 />
               </TouchableOpacity>
 
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={[
                   s.hbtn,
                   { backgroundColor: C.surface, borderColor: C.borderStrong },
@@ -483,7 +483,7 @@ export default function BerandaScreen() {
                     { backgroundColor: C.danger, borderColor: C.surface },
                   ]}
                 />
-              </TouchableOpacity>
+              </TouchableOpacity> */}
 
               <TouchableOpacity
                 style={[
