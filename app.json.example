@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.reka.sipoapp",
+      "bundleIdentifier": "[Your bundleIdentifier, Ex: com.sipo.mobile]",
       "infoPlist": {
         "UIBackgroundModes": ["remote-notification", "remote-notification"],
         "ITSAppUsesNonExemptEncryption": false
@@ -21,7 +21,7 @@
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "icon": "./assets/images/icon-shadow.png",
-      "package": "com.reka.sipoapp",
+      "package": "[Your bundleIdentifier, Ex: com.sipo.mobile]",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "POST_NOTIFICATIONS",
@@ -72,14 +72,14 @@
         "origin": false
       },
       "eas": {
-        "projectId": "5f4848f3-6bce-4af5-b269-f0021407c68b"
+        "projectId": "[Your Project Id, in Expo website]"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/5f4848f3-6bce-4af5-b269-f0021407c68b"
+      "url": "https://u.expo.dev/[Your Project Id, in Expo website]"
     }
   }
 }
